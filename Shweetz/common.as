@@ -53,8 +53,7 @@ bool IsInTrigger(vec3& pos, array<double>& TRIGGER) {
 }
 
 bool IsInTrigger(vec3& pos, int triggerIndex) {
-    Trigger3D trigger;
-    GetTrigger(trigger, triggerIndex);
+    Trigger3D trigger = GetTriggerByIndex(triggerIndex);
     return trigger.ContainsPoint(pos);
 }
 
@@ -63,15 +62,8 @@ bool IsInTrigger(vec3& pos, Trigger3D trigger) {
 }
 
 Trigger3D GetTriggerVar() {
-    Trigger3D trigger(vec3(-1,-1,-1), vec3(-1,-1,-1)); // invalid trigger
     uint triggerIndex = int(GetD("shweetz_trigger")) - 1;
-    print("" + GetTriggerIds().Length);
-    if (triggerIndex < GetTriggerIds().Length) {
-        GetTrigger(trigger, GetTriggerIds()[triggerIndex]);
-        print("" + triggerIndex);
-        //UI::TextDimmed("The car must be in the trigger of coordinates: " + trigger.Position.ToString());
-    }
-    return trigger;
+    return GetTriggerByIndex(triggerIndex);
 }
 
 float Norm(vec3& vec) {
