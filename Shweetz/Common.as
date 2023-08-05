@@ -54,6 +54,7 @@ bool IsInTrigger(vec3& pos, array<double>& TRIGGER) {
 
 bool IsInTrigger(vec3& pos, int triggerIndex) {
     Trigger3D trigger = GetTriggerByIndex(triggerIndex);
+    // print(trigger.Position.ToString());
     return trigger.ContainsPoint(pos);
 }
 

@@ -28,12 +28,16 @@ void Main()
     // Handlers
     RegisterBruteforceEvaluation("1nosepos_plus", "Nosepos+", OnEvaluateNosePos, UIBfNosePos);
 
-    RegisterValidationHandler("rules", "Shweetz's custom validation", UIValidation);
+    //RegisterValidationHandler("rules", "Shweetz's custom validation", UIValidation);
 }
 
 void OnSimulationBegin(SimulationManager@ simManager)
 {
     string controller = GetS("controller");
+    if (controller == "bruteforce") {
+        best = CarState(); // Reset best when starting bruteforce
+        //OnSimulationBeginBf(simManager);
+    }
     if (controller == "rules") {
         int baseRunDuration = simManager.EventsDuration;
         print("Base run time: " + baseRunDuration);

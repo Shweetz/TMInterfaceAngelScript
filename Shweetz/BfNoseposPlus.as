@@ -63,8 +63,8 @@ void UIConditions()
     UI::SliderFloatVar("Min speed (km/h)", "bf_condition_speed", 0.0f, 1000.0f);
     UI::InputIntVar("Min CP collected", "shweetz_min_cp", 1);
     UI::SliderIntVar("Min wheels on ground", "shweetz_min_wheels_on_ground", 0, 4);
-    UI::SliderIntVar("Gear (-1 to disable)", "shweetz_gear", -1, 6);
-    UI::InputIntVar("Trigger index (-1 to disable)", "shweetz_trigger", 1);
+    UI::SliderIntVar("Gear (0 to disable)", "shweetz_gear", -1, 6);
+    UI::InputIntVar("Trigger index (0 to disable)", "shweetz_trigger", 1);
     //int triggerIndex = int(GetD("shweetz_trigger"))-1;
     Trigger3D trigger = GetTriggerVar();
     if (trigger.Size.x != -1) {
@@ -208,12 +208,12 @@ bool AreConditionsMet(SimulationManager@ simManager)
         return false;
     }
 
-    if (GetD("shweetz_gear") != -1 && GetD("shweetz_gear") != simManager.SceneVehicleCar.CarEngine.Gear) {
+    if (GetD("shweetz_gear") > 0 && GetD("shweetz_gear") != simManager.SceneVehicleCar.CarEngine.Gear) {
         return false;
     }
 
     //print("" + IsInTrigger(pos, int(GetD("shweetz_trigger_index"))));
-    if (!IsInTrigger(pos, int(GetD("shweetz_trigger_index")))) {
+    if (GetD("shweetz_trigger_index") > 0 && !IsInTrigger(pos, int(GetD("shweetz_trigger_index")))) {
         return false;
     }
 
@@ -223,3 +223,8 @@ bool AreConditionsMet(SimulationManager@ simManager)
 
     return true;
 }
+
+/*void OnSimulationBeginBf(SimulationManager@ simManager)
+{
+    best = CarState();
+}*/
