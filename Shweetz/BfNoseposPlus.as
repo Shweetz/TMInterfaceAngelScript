@@ -71,15 +71,15 @@ void UIConditions()
     UI::InputIntVar("Min CP collected", "shweetz_min_cp", 1);
     UI::SliderIntVar("Min wheels on ground", "shweetz_min_wheels_on_ground", 0, 4);
     UI::SliderIntVar("Gear (0 to disable)", "shweetz_gear", -1, 6);
-    UI::InputIntVar("Trigger index (0 to disable)", "shweetz_trigger", 1);
-    //int triggerIndex = int(GetD("shweetz_trigger"))-1;
+    UI::InputIntVar("Trigger index (0 to disable)", "shweetz_trigger_index", 1);
+    //int triggerIndex = int(GetD("shweetz_trigger_index"))-1;
     Trigger3D trigger = GetTriggerVar();
     if (trigger.Size.x != -1) {
         vec3 pos2 = trigger.Position + trigger.Size;
         UI::TextDimmed("The car must be in the trigger of coordinates: ");
         UI::TextDimmed("" + trigger.Position.ToString() + " " + pos2.ToString());
     }
-    /*int triggerIndex = int(GetD("shweetz_trigger"))-1;
+    /*int triggerIndex = int(GetD("shweetz_trigger_index"))-1;
     if (triggerIndex > -1) {
         Trigger3D trigger;
         GetTrigger(trigger, GetTriggerIds()[triggerIndex]);

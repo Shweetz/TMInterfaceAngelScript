@@ -9,6 +9,8 @@ To use my DrawFuture plugin, download the folder "DrawFuture" and place it in TM
 
 This one requires 2 TMI instances, 1 being in run mode for the map you want, and the other needs to select the alternate bruteforce "SimInstance", then simulate any replay that was saved on the same map.
 
+The plugin will read "inputs.txt" as the inputs for the replay in simulation, and the plugin will read&write to "draw_points.txt".
+
 You can also separate the AS files, because you only really need the TMI run instance to enable the RunInstance plugin, and the TMI sim instance to enable the SimInstance plugin.
 
 

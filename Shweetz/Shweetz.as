@@ -13,7 +13,7 @@ void Main()
     RegisterVariable("shweetz_min_cp", 0);
     RegisterVariable("shweetz_min_wheels_on_ground", 0);
     RegisterVariable("shweetz_gear", -1);
-    RegisterVariable("shweetz_trigger", 0);
+    RegisterVariable("shweetz_trigger_index", 0);
 
     // Input change
     RegisterVariable("shweetz_input_modifier", "Built-in");
