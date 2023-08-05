@@ -52,6 +52,13 @@ void UINosePos()
             if (UI::DragFloat3Var("Point", "shweetz_point")) {
                 point.str(GetS("shweetz_point"));
             }
+            UI::SameLine();
+            if (UI::Button("Copy coordinates")) {
+                auto camera = GetCurrentCamera();
+                if (@camera != null) {
+                    SetVariable("shweetz_point", camera.Location.Position.ToString());
+                }
+            }
         }
     }
 
