@@ -297,7 +297,7 @@ void OnSimulationStepRules(SimulationManager@ simManager, bool userCancelled)
 
     auto curr = CarState();
     curr.time = raceTime;
-    if (IsEvalTime(raceTime) && IsBetter(simManager, curr)) {
+    if (IsEvalTime(raceTime) && IsBetterNosePos(simManager, curr)) {
 
         if (!GetB("shweetz_lock_base_run")) {
             @unrandomizedInputBuffer = inputBuffer;

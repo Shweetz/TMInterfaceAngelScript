@@ -20,11 +20,21 @@ void UINosePos()
     // string str = GetS("plugin_str");
     // combo shit => SetVariable("plugin_str", str);
 
+    // Eval time
     UI::InputTimeVar("Eval time min", "shweetz_eval_time_min");
     UI::InputTimeVar("Eval time max", "shweetz_eval_time_max");
-        
+    
+    // eval max >= eval min
+    SetVariable("shweetz_eval_time_max", Math::Max(GetD("shweetz_eval_time_min"), GetD("shweetz_eval_time_max")));
+    
+    // inputs max <= eval max
+    if (GetD("bf_inputs_max_time") != 0) {
+        SetVariable("bf_inputs_max_time", Math::Min(GetD("bf_inputs_max_time"), GetD("shweetz_eval_time_max")));
+    }
+
     UI::Dummy( vec2(0, 25) );
 
+    // Change eval
     if (UI::CheckboxVar("Change eval after nosepos is good enough", "shweetz_next_eval_check"))
     {
         UI::TextDimmed("Good enough means angle can be some degrees off from ideal nosepos.");
@@ -65,35 +75,6 @@ void UINosePos()
     UI::Dummy( vec2(0, 25) );
 }
 
-void UIConditions()
-{
-    UI::SliderFloatVar("Min speed (km/h)", "bf_condition_speed", 0.0f, 1000.0f);
-    UI::InputIntVar("Min CP collected", "shweetz_min_cp", 1);
-    UI::SliderIntVar("Min wheels on ground", "shweetz_min_wheels_on_ground", 0, 4);
-    UI::SliderIntVar("Gear (0 to disable)", "shweetz_gear", -1, 6);
-    UI::InputIntVar("Trigger index (0 to disable)", "shweetz_trigger_index", 1);
-    //int triggerIndex = int(GetD("shweetz_trigger_index"))-1;
-    Trigger3D trigger = GetTriggerVar();
-    if (trigger.Size.x != -1) {
-        vec3 pos2 = trigger.Position + trigger.Size;
-        UI::TextDimmed("The car must be in the trigger of coordinates: ");
-        UI::TextDimmed("" + trigger.Position.ToString() + " " + pos2.ToString());
-    }
-    /*int triggerIndex = int(GetD("shweetz_trigger_index"))-1;
-    if (triggerIndex > -1) {
-        Trigger3D trigger;
-        GetTrigger(trigger, GetTriggerIds()[triggerIndex]);
-        print("" + triggerIndex);
-        print("The car must be in the trigger of coordinates: " + trigger.Position.ToString());
-        //UI::TextDimmed("The car must be in the trigger of coordinates: " + trigger.Position.ToString());
-    }*/
-    //print("" + IsInTrigger(vec3(100, 100, 100), int(GetD("shweetz_trigger_index"))));
-    vec3 v = vec3(100 ,100, 100);
-    //print("" + v.ToString());
-
-    UI::Dummy( vec2(0, 25) );
-}
-
 class CarState
 {
     double time = -1;
@@ -116,19 +97,16 @@ BFEvaluationResponse@ OnEvaluateNosePos(SimulationManager@ simManager, const BFE
     auto resp = BFEvaluationResponse();
 
     if (info.Phase == BFPhase::Initial) {
-        if (IsEvalTime(raceTime) && IsBetter(simManager, curr)) {
+        if (IsEvalTime(raceTime) && IsBetterNosePos(simManager, curr)) {
             best = curr;
         }
 
         if (IsMaxTime(raceTime)) {
-            string greenText = "base at " + best.time + ": angle=" + best.angle;
-            if (GetS("shweetz_next_eval") == "Point") greenText += ", distance=" + best.distance;
-            if (GetS("shweetz_next_eval") == "Speed") greenText += ", speed=" + best.speed;          
-            print(greenText);
+            PrintGreenTextNosePos(best);
         }
     }
     else {
-        if (IsEvalTime(raceTime) && IsBetter(simManager, curr)) {
+        if (IsEvalTime(raceTime) && IsBetterNosePos(simManager, curr)) {
             resp.Decision = BFEvaluationDecision::Accept;
         }
 
@@ -143,7 +121,7 @@ BFEvaluationResponse@ OnEvaluateNosePos(SimulationManager@ simManager, const BFE
     return resp;
 }
 
-bool IsBetter(SimulationManager@ simManager, CarState& curr) {
+bool IsBetterNosePos(SimulationManager@ simManager, CarState& curr) {
     // Get values
     int raceTime = simManager.PlayerInfo.RaceTime;
     vec3 pos = simManager.Dyna.CurrentState.Location.Position;
@@ -196,39 +174,11 @@ bool IsBetter(SimulationManager@ simManager, CarState& curr) {
     return curr.angle < best.angle;
 }
 
-bool AreConditionsMet(SimulationManager@ simManager)
-{
-    float speedKmh = Norm(simManager.Dyna.CurrentState.LinearSpeed) * 3.6;
-    vec3 pos = simManager.Dyna.CurrentState.Location.Position;
-
-    if (GetD("bf_condition_speed") > speedKmh) {
-        //print("Speed too low: " + speedKmh + " < " + GetD("bf_condition_speed"));
-        return false;
-    }
-        //print("Speed is ok  : " + speedKmh);
-
-    if (GetD("shweetz_min_cp") > int(simManager.PlayerInfo.CurCheckpointCount)) {
-        return false;
-    }
-
-    if (GetD("shweetz_min_wheels_on_ground") > CountWheelsOnGround(simManager)) {
-        return false;
-    }
-
-    if (GetD("shweetz_gear") > 0 && GetD("shweetz_gear") != simManager.SceneVehicleCar.CarEngine.Gear) {
-        return false;
-    }
-
-    //print("" + IsInTrigger(pos, int(GetD("shweetz_trigger_index"))));
-    if (GetD("shweetz_trigger_index") > 0 && !IsInTrigger(pos, int(GetD("shweetz_trigger_index")))) {
-        return false;
-    }
-
-    // if (simManager.SceneVehicleCar.IsFreeWheeling) {
-    //     return false;
-    // }
-
-    return true;
+void PrintGreenTextNosePos(CarState best) {
+    string greenText = "base at " + best.time + ": angle=" + best.angle;
+    if (GetS("shweetz_next_eval") == "Point") greenText += ", distance=" + best.distance;
+    if (GetS("shweetz_next_eval") == "Speed") greenText += ", speed=" + best.speed;          
+    print(greenText);
 }
 
 /*void OnSimulationBeginBf(SimulationManager@ simManager)

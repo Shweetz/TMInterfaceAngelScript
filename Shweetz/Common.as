@@ -8,18 +8,22 @@ array<string> changeTypes = { "Steering", "Timing", "Create" };
 Point point;
 
 bool IsEvalTime(int raceTime) {
-    return GetVariableDouble("shweetz_eval_time_min") <= raceTime && raceTime <= GetVariableDouble("shweetz_eval_time_max");
+    return GetD("shweetz_eval_time_min") <= raceTime && raceTime <= GetD("shweetz_eval_time_max");
+}
+
+bool IsBeforeEvalTime(int raceTime) {
+    return raceTime < GetD("shweetz_eval_time_max");
 }
 
 bool IsPastEvalTime(int raceTime) {
-    return GetVariableDouble("shweetz_eval_time_max") <= raceTime;
+    return GetD("shweetz_eval_time_max") <= raceTime;
 }
 
 bool IsMaxTime(int raceTime) {
-    return GetVariableDouble("shweetz_eval_time_max") == raceTime;
+    return GetD("shweetz_eval_time_max") == raceTime;
 }
 
-double DistanceToPoint(vec3 pos) {
+double DistanceToPoint(vec3& pos) {
     //Point point(GetS("shweetz_point"));
     return Math::Distance(pos, point.pvec);
 }
@@ -32,7 +36,7 @@ double DistanceToPoint(vec3 pos) {
     return (pos[0]-pvec[0]) * (pos[0]-pvec[0]) + (pos[1]-pvec[1]) * (pos[1]-pvec[1]) + (pos[2]-pvec[2]) * (pos[2]-pvec[2]);
 }*/
 
-int CountWheelsOnGround(SimulationManager@ simManager) {
+/*int CountWheelsOnGround(SimulationManager@ simManager) {
     int count = 0;
     if (simManager.Wheels.FrontLeft.RTState.HasGroundContact) count++;
     if (simManager.Wheels.FrontRight.RTState.HasGroundContact) count++;
@@ -40,8 +44,17 @@ int CountWheelsOnGround(SimulationManager@ simManager) {
     if (simManager.Wheels.BackLeft.RTState.HasGroundContact) count++;
 
     return count;
-}
+}*/
+int CountWheelsOnGround(SimulationManager@ simManager) {
+    int count = 0;
+    auto@ state = simManager.SaveState();
+    if (state.Wheels.FrontLeft.RTState.HasGroundContact) count++;
+    if (state.Wheels.FrontRight.RTState.HasGroundContact) count++;
+    if (state.Wheels.BackRight.RTState.HasGroundContact) count++;
+    if (state.Wheels.BackLeft.RTState.HasGroundContact) count++;
 
+    return count;
+}
 /*bool IsInTrigger(vec3& pos, array<double>& TRIGGER) {
     double x1 = Math::Min(TRIGGER[0], TRIGGER[3]), x2 = Math::Max(TRIGGER[0], TRIGGER[3]);
     double y1 = Math::Min(TRIGGER[1], TRIGGER[4]), y2 = Math::Max(TRIGGER[1], TRIGGER[4]);
@@ -52,19 +65,33 @@ int CountWheelsOnGround(SimulationManager@ simManager) {
     return false;
 }*/
 
-bool IsInTrigger(vec3& pos, int triggerIndex) {
-    Trigger3D trigger = GetTriggerByIndex(triggerIndex);
-    // print(trigger.Position.ToString());
+/**
+ * Check if car is in trigger.
+ * Trigger index starts at 1, like in TMI UI.
+ * Index parameter in GetTriggerByIndex starts at 0, so need to do "-1". 
+ */
+/*bool IsInTrigger(vec3& pos, int triggerIndex) {
+    Trigger3D trigger = GetTriggerByIndex(triggerIndex-1);
     return trigger.ContainsPoint(pos);
-}
+}*/
 
 /*bool IsInTrigger(vec3& pos, Trigger3D trigger) {
     return trigger.ContainsPoint(pos);
 }*/
 
+bool IsInTrigger(vec3& pos) {
+    auto trigger = GetTriggerVar();
+    return trigger.ContainsPoint(pos);
+}
+
+/**
+ * Get trigger with index "shweetz_trigger_index"
+ * The variable index starts at 1, like in TMI UI.
+ * Index parameter in GetTriggerByIndex starts at 0, so need to do "-1".
+ */
 Trigger3D GetTriggerVar() {
-    uint triggerIndex = int(GetD("shweetz_trigger_index")) - 1;
-    return GetTriggerByIndex(triggerIndex);
+    uint triggerIndex = int(GetD("shweetz_trigger_index"));
+    return GetTriggerByIndex(triggerIndex-1);
 }
 
 float Norm(vec3& vec) {
@@ -93,12 +120,12 @@ class Point
         str("0 0 0");
     }
 
-    Point(string s)
+    Point(string& s)
     {
         str(s);
     }
 
-    void str(string s)
+    void str(string& s)
     {
         pstr = s;
         array<string>@ splits = s.Split(" ");
@@ -107,7 +134,7 @@ class Point
         pvec.z = Text::ParseFloat(splits[2]);
     }
 
-    void vec(vec3 v)
+    void vec(vec3& v)
     {
         pvec = v;
     }
@@ -164,7 +191,7 @@ class Rule
         Rule(inputTypes[0], changeTypes[0], 0.01, 0, 0, 50);
     }
 
-    Rule(string i, string c, float p, int s, int e, int d)
+    Rule(string& i, string& c, float p, int s, int e, int d)
     {
         input = i;
         change = c;
@@ -179,7 +206,7 @@ class Rule
         return input + "," + change + "," + proba + "," + start_time + "," + end_time + "," + diff;
     }
 
-    void deserialize(string str)
+    void deserialize(string& str)
     {
         print(str);
         array<string>@ splits = str.Split(",");
@@ -206,7 +233,7 @@ string Serialize(array<Rule@> rules)
     return str;
 }
 
-void Deserialize(string rules_str)
+void Deserialize(string& rules_str)
 {
     rules.Resize(0);
     // Separate big string in rules
@@ -283,3 +310,28 @@ void LoadSaveStateFromFile(SimulationManager@ simManager, string&in filename) {
     simManager.RewindToState(f);
     print("Loaded save state at " + simManager.RaceTime);
 }
+
+void PrintArray(array<int> arr)
+{
+    array<string> arr_str;
+    for (uint i = 0; i < arr.Length; i++)
+    {
+        arr_str.Add("" + arr[i]);
+    }
+    print(Text::Join(arr_str, " "));
+}
+
+void PrintDict(dictionary dict)
+{
+    array<string> keys = dict.GetKeys();
+    for (uint i = 0; i < dict.GetSize(); i++)
+    {
+        print(keys[i] + " " + int(dict[keys[i]]));
+    }
+    print("");
+}
+/* dict: to init/set (out of a function)
+dictionary baseAirTimes = {
+    {"18000", 0},
+    {"18010", 0}
+};*/
