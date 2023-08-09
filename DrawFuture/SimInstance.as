@@ -20,39 +20,57 @@ void AddTriggerCommand(SimulationManager@ simManager) {
 
 // array<Point> points;
 // string pointsFile = "points.txt";
+string inputsFile = "inputs.txt";
+uint oldInputsFileLength = 0;
 array<string> commands;
 SimulationState state;
-string inputsFile = "inputs.txt";
-string inputsFileContent = "";
-string newContent = "";
 bool executeHandler = false;
 bool simulatingNewInputs = true;
-int maxSimTime = 15000; // replaced with simManager.EventsDuration
+int maxSimTime = 0; // replaced with simManager.EventsDuration
+uint tickCountBetween2Points = 10; // 1 trigger per X ticks
 
 bool HasFileChanged(string fileName)
 {
-    CommandList list(fileName);
-    list.Process(CommandListProcessOption::OnlyParse);
-    //SetCurrentCommandList(list);
-    /*if (list.Content != pointsFileContent) {
-        pointsFileContent = list.Content;
-        return true;
+    uint oldLength = oldInputsFileLength;
+    if (fileName == pointsFile) {
+        oldLength = oldPointsFileLength;
+    } else {
+        // return false to optimize if we don't listen for inputs file changing
+        //return false;
     }
-    return false;*/
-    return list.Content != inputsFileContent;
+    return CommandList(fileName).Content.Length != oldLength;
+    /*auto start = Time::Now;
+    CommandList list(fileName);
+    print("" + (Time::Now - start));
+    list.Process(CommandListProcessOption::OnlyParse);
+    print("" + (Time::Now - start));
+    auto a = list.Content != inputsFileContent;
+    print("" + (Time::Now - start));
+    return a;*/
 }
 
 void OnSimulationBegin(SimulationManager@ simManager)
 {
+    executeHandler = GetVariableString("controller") == "SimInstance";
+    if (!executeHandler) {
+        // Not our handler, do nothing.
+        return;
+    }
+
     simManager.RemoveStateValidation();
 
-    CommandList list(inputsFile);
-    list.Process(CommandListProcessOption::ExecuteImmediately);
-    
     maxSimTime = simManager.EventsDuration;
+    print("Validated replay lasts " + maxSimTime);
     //simManager.SetSimulationTimeLimit(maxSimTime + 1000);
+    
+    // Load inputs from inputsFile
+    auto@ list = CommandList(inputsFile);
+    list.Process(CommandListProcessOption::ExecuteImmediately);
+    print("Inputs file " + inputsFile + " loaded with " + list.InputCommands.Length + " inputs, simulating path until " + maxSimTime);
+    oldInputsFileLength = list.Content.Length;
 
-    executeHandler = GetVariableString("controller") == "SimInstance";
+    commands.Resize(0);
+    commands.Add("remove_trigger all"); 
 }
 
 void OnSimulationStep(SimulationManager@ simManager, bool userCancelled)
@@ -65,16 +83,13 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled)
         simManager.SetSimulationTimeLimit(10);
         return;
     }
-    /*if (simManager.PlayerInfo.RaceFinished) {
-        simManager.RewindToState(state);
-        return;
-    }*/
+    
     //print("");
     if (HasFileChanged(inputsFile)) {
-        print("Inputs file changed, simulating new path until " + maxSimTime);
+        print("Inputs file " + inputsFile + " changed, simulating new path until " + maxSimTime);
         CommandList list(inputsFile);
         list.Process(CommandListProcessOption::OnlyParse);
-        inputsFileContent = list.Content;
+        oldInputsFileLength = list.Content.Length;
 
         // Load inputs
         simManager.InputEvents.Clear();
@@ -87,11 +102,12 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled)
         simManager.RewindToState(state);
         simulatingNewInputs = true;
 
+        print("Inputs file loaded with " + list.InputCommands.Length + " inputs");
+
         // Write to points file to remove triggers
         commands.Resize(0);
         commands.Add("remove_trigger all"); 
 
-        //simManager.RewindToState(state);
         // return;
     }
 
@@ -104,6 +120,10 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled)
         return;
     } else if (raceTime > maxSimTime - 10) {
         // Waiting for inputs to change
+        if (simulatingNewInputs) {
+            print("Simulating done, waiting for new inputs");
+        }
+
         // Rewind is needed to not get thrown out of sim mode, but waiting would be better
         simManager.RewindToState(state);
         simulatingNewInputs = false;
@@ -111,19 +131,18 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled)
     }
 
     if (simulatingNewInputs) {
+
+        if (raceTime % (tickCountBetween2Points * 10) == 0) {
+            AddTriggerCommand(simManager);
+        }
         // print("time=" + raceTime);
-        AddTriggerCommand(simManager);
 
         if (raceTime % 1000 == 0) { // probably not needed after mutex implem
         // if (simManager.PlayerInfo.RaceFinished) {
-            /*for (uint i = 0; i < points.Length; i++) {
-                Point p = points[i];
-                commands.Add("add_trigger " + p.x + " " + p.y + " " + p.z + " "+ (p.x+0.1) + " " + (p.y+0.1) + " " + (p.z+0.1));
-            }*/
-            // print(Text::Join(strings, "\n"));
+        // if (raceTime == maxSimTime - 10) {
             // Write to points file
             CommandList file;
-            file.Content = Text::Join(commands, "\n");            
+            file.Content = Text::Join(commands, "\n");
             file.Save(pointsFile);
 
             // Clear the list (only if RunInstance deletes the file content after reading it)
@@ -136,9 +155,17 @@ void Main()
 {
     RegisterValidationHandler("SimInstance", "SimInstance");
 
-    // Create or empty points file
-    CommandList list;
-    list.Save(pointsFile);
+    // Create or clear points file
+    CommandList emptyList;
+    emptyList.Save(pointsFile);
+    
+    // Create inputs file if doesn't exist
+    try {
+        CommandList list(inputsFile);
+    } catch {
+        print("Inputs file " + inputsFile + " needs to contain the inputs to draw");
+        emptyList.Save(inputsFile);
+    }
 }
 
 PluginInfo@ GetPluginInfo()
@@ -146,7 +173,7 @@ PluginInfo@ GetPluginInfo()
     auto info = PluginInfo();
     info.Name = "DrawFuture";
     info.Author = "Shweetz";
-    info.Version = "v1.0.0";
+    info.Version = "v1.0.1";
     info.Description = "Description";
     return info;
 }

@@ -1,29 +1,38 @@
 string pointsFile = "draw_points.txt";
-// string infoFile = "info.txt";
-CommandList list;
-uint oldFileLength = 0;
-
-bool HasFileChanged()
-{
-    return CommandList(pointsFile).Content.Length != oldFileLength;
-}
+uint oldPointsFileLength = 0;
 
 void Render()
 {
-    if (HasFileChanged()) {
-        //log("huh");
-        list = CommandList(pointsFile);
-        list.Process(CommandListProcessOption::ExecuteImmediately);
-        //Empty the info file
-        CommandList list2();
-        //list2.Content=""; // TODO
-        // list2.Save(pointsFile);
+    if (executeHandler) {
+        // The instance in simulation should not try to change triggers
+        return;
+    }
 
+    if (HasFileChanged(pointsFile)) {
+        // Execute commands to update triggers
+        CommandList list(pointsFile);
+        list.Process(CommandListProcessOption::ExecuteImmediately);
+        oldPointsFileLength = list.Content.Length;
         //log("Content"+list.Content);
-        oldFileLength = list.Content.Length;
+
+        // Empty the info file
+        // CommandList list2();
+        // list2.Save(pointsFile);
     }
     
 }
+
+/*bool HasFileChanged(string fileName)
+{
+    uint oldLength = oldInputsFileLength;
+    if (fileName == pointsFile) {
+        oldLength = oldPointsFileLength;
+    } else {
+        // return false to optimize if we don't listen for inputs file changing
+        //return false;
+    }
+    return CommandList(fileName).Content.Length != oldLength;
+}*/
 
 /*PluginInfo@ GetPluginInfo()
 {
