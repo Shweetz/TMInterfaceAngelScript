@@ -18,27 +18,43 @@ void AddTriggerCommand(SimulationManager@ simManager) {
     //commands.Add("add_trigger " + p.x + " " + p.y + " " + p.z + " "+ (p.x+0.1) + " " + (p.y+0.1) + " " + (p.z+0.1) + " # " + simManager.RaceTime);
 }
 
+bool executeHandler = false;
 // array<Point> points;
 // string pointsFile = "points.txt";
 string inputsFile = "inputs.txt";
 uint oldInputsFileLength = 0;
+string oldInputsFileContent = "";
+int lastFileCheckTime = 0;
+
 array<string> commands;
 SimulationState state;
-bool executeHandler = false;
 bool simulatingNewInputs = true;
 int maxSimTime = 0; // replaced with simManager.EventsDuration
-uint tickCountBetween2Points = 10; // 1 trigger per X ticks
+uint tickCountBetween2Points = 1; // 1 trigger per X ticks
 
-bool HasFileChanged(string fileName)
+bool NeedParseFile(string fileName)
 {
-    uint oldLength = oldInputsFileLength;
+    // Points file
     if (fileName == pointsFile) {
-        oldLength = oldPointsFileLength;
-    } else {
-        // return false to optimize if we don't listen for inputs file changing
-        //return false;
+        return CommandList(fileName).Content.Length != oldPointsFileLength;
+    } 
+
+    // Inputs file
+    bool changed = false;
+    if (CommandList(fileName).Content.Length != oldInputsFileLength) {
+        // content length changed (warning, a time/steer change will not always trigger this check)
+        changed = true;
     }
-    return CommandList(fileName).Content.Length != oldLength;
+    
+    int nextCheckTime = oldInputsFileLength / 100; // E05 is 1.6M chars, inputs check takes 130ms, should be done every 16000ms
+    if (Time::Now - lastFileCheckTime > nextCheckTime) {
+        // last check was more than X ms ago
+        changed = true;
+    }
+
+    // return if it's time to reload
+    return changed;
+
     /*auto start = Time::Now;
     CommandList list(fileName);
     print("" + (Time::Now - start));
@@ -62,15 +78,6 @@ void OnSimulationBegin(SimulationManager@ simManager)
     maxSimTime = simManager.EventsDuration;
     print("Validated replay lasts " + maxSimTime);
     //simManager.SetSimulationTimeLimit(maxSimTime + 1000);
-    
-    // Load inputs from inputsFile
-    auto@ list = CommandList(inputsFile);
-    list.Process(CommandListProcessOption::ExecuteImmediately);
-    print("Inputs file " + inputsFile + " loaded with " + list.InputCommands.Length + " inputs, simulating path until " + maxSimTime);
-    oldInputsFileLength = list.Content.Length;
-
-    commands.Resize(0);
-    commands.Add("remove_trigger all"); 
 }
 
 void OnSimulationStep(SimulationManager@ simManager, bool userCancelled)
@@ -85,30 +92,34 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled)
     }
     
     //print("");
-    if (HasFileChanged(inputsFile)) {
-        print("Inputs file " + inputsFile + " changed, simulating new path until " + maxSimTime);
+    if (NeedParseFile(inputsFile)) {
         CommandList list(inputsFile);
         list.Process(CommandListProcessOption::OnlyParse);
-        oldInputsFileLength = list.Content.Length;
 
-        // Load inputs
-        simManager.InputEvents.Clear();
-        for (uint i = 0; i < list.InputCommands.Length; i++) {
-            //print("" + list.InputCommands[i].Timestamp + " " + list.InputCommands[i].Type + " " + list.InputCommands[i].State);
-            simManager.InputEvents.Add(list.InputCommands[i].Timestamp, list.InputCommands[i].Type, list.InputCommands[i].State);
+        if (list.Content != oldInputsFileContent) {
+            oldInputsFileLength = list.Content.Length;
+            oldInputsFileContent = list.Content;
+
+            // Load inputs
+            simManager.InputEvents.Clear();
+            for (uint i = 0; i < list.InputCommands.Length; i++) {
+                //print("" + list.InputCommands[i].Timestamp + " " + list.InputCommands[i].Type + " " + list.InputCommands[i].State);
+                simManager.InputEvents.Add(list.InputCommands[i].Timestamp, list.InputCommands[i].Type, list.InputCommands[i].State);
+            }
+
+            lastFileCheckTime = Time::Now;
+            print("Inputs file " + inputsFile + " loaded with " + list.InputCommands.Length + " inputs, simulating path until " + maxSimTime);
+
+            // Write to points file to remove triggers
+            commands.Resize(0);
+            commands.Add("remove_trigger all"); 
+
+            // Rewind to play the inputs
+            simManager.RewindToState(state);
+            simulatingNewInputs = true;
+
+            // return;
         }
-
-        // Rewind to play the inputs
-        simManager.RewindToState(state);
-        simulatingNewInputs = true;
-
-        print("Inputs file loaded with " + list.InputCommands.Length + " inputs");
-
-        // Write to points file to remove triggers
-        commands.Resize(0);
-        commands.Add("remove_trigger all"); 
-
-        // return;
     }
 
     int raceTime = simManager.RaceTime;
@@ -148,6 +159,18 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled)
             // Clear the list (only if RunInstance deletes the file content after reading it)
             // commands.Resize(0);
         }
+    }
+}
+
+void OnCheckpointCountChanged(SimulationManager@ simManager, int count, int target)
+{
+    if (!executeHandler) {
+        // Not our handler, do nothing.
+        return;
+    }
+    if (count == target) {
+        // Keep simulation going if the replay finishes before the inputs
+        simManager.PreventSimulationFinish();
     }
 }
 

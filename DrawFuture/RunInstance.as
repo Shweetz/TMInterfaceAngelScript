@@ -8,7 +8,7 @@ void Render()
         return;
     }
 
-    if (HasFileChanged(pointsFile)) {
+    if (NeedParseFile(pointsFile)) {
         // Execute commands to update triggers
         CommandList list(pointsFile);
         list.Process(CommandListProcessOption::ExecuteImmediately);
