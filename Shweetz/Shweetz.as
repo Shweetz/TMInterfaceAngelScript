@@ -4,10 +4,11 @@ void Main()
     RegisterVariable("shweetz_eval_time_min", 0);
     RegisterVariable("shweetz_eval_time_max", 10000);
     RegisterVariable("shweetz_next_eval_check", false);
-    RegisterVariable("shweetz_next_eval", "speed");
+    RegisterVariable("shweetz_next_eval", modes[0]);
     RegisterVariable("shweetz_point", "0 0 0");
-    RegisterVariable("shweetz_angle_min_deg", 80);
-    RegisterVariable("shweetz_angle_max_deg", 90);
+    RegisterVariable("shweetz_angle_min_deg", 10);
+    //RegisterVariable("shweetz_angle_max_deg", 90);
+    RegisterVariable("shweetz_pitch_deg", 85);
 
     // Conditions
     RegisterVariable("shweetz_min_cp", 0);
@@ -32,19 +33,25 @@ void Main()
     //RegisterValidationHandler("rules", "Shweetz's custom validation", UIValidation);
 }
 
+// BFEvaluationInfo values
+bool rewinded = false; // info.Rewinded
+uint iterations = 0; // info.Iterations
+
 void OnSimulationBegin(SimulationManager@ simManager)
 {
     string controller = GetS("controller");
     if (controller == "bruteforce") {
+        // Reset values when starting bruteforce
+        SetVariable("bf_override_stop_time", 0);
+        prevTime = 0;
+        best = CarState();
+        
         string bf_target = GetS("bf_target");
         if (bf_target == "nosepos_plus") {
             print("Starting Nosepos+ BF Evaluation");
-            best = CarState(); // Reset best when starting bruteforce
         } else if (bf_target == "airtime") {
             print("Starting AirTime BF Evaluation");
-            bestAirTime = -1;
         }
-        // 1nosepos_plus or 2airtime?
     }
     if (controller == "rules") {
         int baseRunDuration = simManager.EventsDuration;
@@ -69,7 +76,7 @@ PluginInfo@ GetPluginInfo()
     auto info = PluginInfo();
     info.Name = "Shweetz's plugin";
     info.Author = "Shweetz";
-    info.Version = "v1.0.1";
+    info.Version = "v1.0.2";
     info.Description = "Description";
     return info;
 }

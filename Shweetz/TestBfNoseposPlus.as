@@ -14,7 +14,7 @@ auto best = CarState();*/
     int raceTime = simManager.PlayerInfo.RaceTime;
     vec3 pos = simManager.Dyna.CurrentState.Location.Position;
     vec3 speedVec = simManager.Dyna.CurrentState.LinearSpeed;
-    float speed = Norm(speedVec);
+    float speed = speedVec.Length();
     float speedKmh = speed * 3.6;
     float carYaw, carPitch, carRoll;
     simManager.Dyna.CurrentState.Location.Rotation.GetYawPitchRoll(carYaw, carPitch, carRoll);

@@ -196,7 +196,7 @@ PluginInfo@ GetPluginInfo()
     auto info = PluginInfo();
     info.Name = "DrawFuture";
     info.Author = "Shweetz";
-    info.Version = "v1.0.1";
+    info.Version = "v1.0.2";
     info.Description = "Description";
     return info;
 }

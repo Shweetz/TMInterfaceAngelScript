@@ -1,11 +1,11 @@
 array<string> targets = { "Nosepos+" };
-array<string> modes = { "Point", "Speed", "Time" };
+array<string> modes = { "Point", "Speed", "Time", "Hold" };
 array<string> inputModifiers = { "Built-in", "Rules" };
 array<Rule@> rules;
 //Rules@ rules;
 array<string> inputTypes = { "Steer", "Accelerate", "Brake" };
 array<string> changeTypes = { "Steering", "Timing", "Create" };
-Point point;
+int prevTime = 0; // Time of previous tick
 
 bool IsEvalTime(int raceTime) {
     return GetD("shweetz_eval_time_min") <= raceTime && raceTime <= GetD("shweetz_eval_time_max");
@@ -24,7 +24,7 @@ bool IsMaxTime(int raceTime) {
 }
 
 double DistanceToPoint(vec3& pos) {
-    //Point point(GetS("shweetz_point"));
+    Point point(GetS("shweetz_point"));
     return Math::Distance(pos, point.pvec);
 }
 
@@ -94,8 +94,19 @@ Trigger3D GetTriggerVar() {
     return GetTriggerByIndex(triggerIndex-1);
 }
 
-float Norm(vec3& vec) {
+/*float Norm(vec3& vec) {
     return Math::Sqrt((vec.x * vec.x) + (vec.y * vec.y) + (vec.z * vec.z));
+}*/
+
+string FormatSpeed(float speed) {
+    // TODO working case for all =>
+    // build string with integer part, add .
+    // add decimal until precision 3 or width 7, then pad left until 7
+    if (speed < 1000) {
+        return Text::FormatFloat(speed, "", 7, 3);
+    } else {
+        return Text::FormatFloat(speed, "", 7, 2);
+    }
 }
 
 bool GetB(string& str) {
@@ -108,6 +119,27 @@ double GetD(string& str) {
 
 string GetS(string& str) {
     return GetVariableString(str);
+}
+
+auto best = CarState();
+auto curr = CarState();
+
+class CarState
+{
+    int time = -1;
+    double angle = -1;
+    double distance = -1;
+    double speed = -1;
+    int airTime = 0;
+    int noseposUntil = 0;
+
+    void ResetForNewTick() 
+    {
+        time = -1;
+        angle = -1;
+        distance = -1;
+        speed = -1;
+    }
 }
 
 class Point

@@ -5,34 +5,31 @@ void UIConditions()
     UI::SliderIntVar("Min wheels on ground", "shweetz_min_wheels_on_ground", 0, 4);
     UI::SliderIntVar("Gear (0 to disable)", "shweetz_gear", -1, 6);
     UI::InputIntVar("Trigger index (0 to disable)", "shweetz_trigger_index", 1);
-    //int triggerIndex = int(GetD("shweetz_trigger_index"))-1;
+
+    // Trigger
     Trigger3D trigger = GetTriggerVar();
     if (trigger.Size.x != -1) {
         vec3 pos2 = trigger.Position + trigger.Size;
         UI::TextDimmed("The car must be in the trigger of coordinates: ");
         UI::TextDimmed("" + trigger.Position.ToString() + " " + pos2.ToString());
     }
-    /*int triggerIndex = int(GetD("shweetz_trigger_index"))-1;
-    if (triggerIndex > -1) {
-        Trigger3D trigger;
-        GetTrigger(trigger, GetTriggerIds()[triggerIndex]);
-        print("" + triggerIndex);
-        print("The car must be in the trigger of coordinates: " + trigger.Position.ToString());
-        //UI::TextDimmed("The car must be in the trigger of coordinates: " + trigger.Position.ToString());
-    }*/
-    //print("" + IsInTrigger(vec3(100, 100, 100), int(GetD("shweetz_trigger_index"))));
-    vec3 v = vec3(100 ,100, 100);
-    //print("" + v.ToString());
+
+    // Freewheel
+    // UI::PushItemWidth(300);
+    // UI::CheckboxVar("Check free wheel condition                 ", "shweetz_fw_act");
+    // UI::SameLine();
+    // UI::CheckboxVar("Free wheel state", "shweetz_fw");
+    // UI::PopItemWidth();
 
     UI::Dummy( vec2(0, 25) );
 }
 
 bool AreConditionsMet(SimulationManager@ simManager)
 {
-    // Choose a tick to print if a condtion failed
+    // Choose a tick to print if a condition failed
     int debugTick = -1;
 
-    float speedKmh = Norm(simManager.Dyna.CurrentState.LinearSpeed) * 3.6;
+    float speedKmh = simManager.Dyna.CurrentState.LinearSpeed.Length() * 3.6;
     if (speedKmh < GetD("bf_condition_speed")) {
         if (simManager.TickTime == debugTick) { print("Condition speed too low: " + speedKmh + " < " + GetD("bf_condition_speed")); }
         return false;
