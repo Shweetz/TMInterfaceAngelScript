@@ -22,12 +22,16 @@ void UIConditions()
     // UI::PopItemWidth();
 
     UI::Dummy( vec2(0, 25) );
+    
+    UI::InputTimeVar("Tick to print if conditions are met", "shweetz_debug");
+
+    UI::Dummy( vec2(0, 25) );
 }
 
 bool AreConditionsMet(SimulationManager@ simManager)
 {
     // Choose a tick to print if a condition failed
-    int debugTick = -1;
+    int debugTick = int(GetD("shweetz_debug"));
 
     float speedKmh = simManager.Dyna.CurrentState.LinearSpeed.Length() * 3.6;
     if (speedKmh < GetD("bf_condition_speed")) {

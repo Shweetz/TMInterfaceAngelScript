@@ -8,13 +8,16 @@ void Main()
     RegisterVariable("shweetz_point", "0 0 0");
     RegisterVariable("shweetz_angle_min_deg", 10);
     //RegisterVariable("shweetz_angle_max_deg", 90);
+    RegisterVariable("shweetz_yaw_deg", 0);
     RegisterVariable("shweetz_pitch_deg", 85);
+    RegisterVariable("shweetz_allow_yaw_180", true);
 
     // Conditions
     RegisterVariable("shweetz_min_cp", 0);
     RegisterVariable("shweetz_min_wheels_on_ground", 0);
     RegisterVariable("shweetz_gear", -1);
     RegisterVariable("shweetz_trigger_index", 0);
+    RegisterVariable("shweetz_debug", 0);
 
     // Input change
     RegisterVariable("shweetz_input_modifier", "Built-in");
@@ -76,7 +79,7 @@ PluginInfo@ GetPluginInfo()
     auto info = PluginInfo();
     info.Name = "Shweetz's plugin";
     info.Author = "Shweetz";
-    info.Version = "v1.0.2";
+    info.Version = "v1.0.3";
     info.Description = "Description";
     return info;
 }

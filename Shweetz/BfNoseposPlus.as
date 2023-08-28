@@ -37,7 +37,9 @@ void UINosePos()
 
     UI::Dummy( vec2(0, 25) );
 
+    UI::InputIntVar("Target yaw (°) (90/-90 for left/right)", "shweetz_yaw_deg", 1);
     UI::InputIntVar("Target pitch (°)", "shweetz_pitch_deg", 1);
+    UI::CheckboxVar("Accept any yaw for nosepos", "shweetz_allow_yaw_180");
 
     // Change eval
     if (UI::CheckboxVar("Change eval after nosepos is good enough", "shweetz_next_eval_check"))
@@ -115,24 +117,46 @@ BFEvaluationResponse@ OnEvaluateNosePos(SimulationManager@ simManager, const BFE
     return resp;
 }
 
+/**
+ * Project an angle in degrees in [-180; 180[
+ */
+double AngleProject180To180Deg(double angle_deg) {
+    while (angle_deg < -180) {
+        angle_deg += 360;
+    }
+    while (angle_deg >= 180) {
+        angle_deg -= 360;
+    }
+    return angle_deg;
+}
+
 double ComputeCarAngleToTarget(SimulationManager@ simManager)
 {
     // Get values
     vec3 speedVec = simManager.Dyna.CurrentState.LinearSpeed;
-    float carYaw, carPitch, carRoll;
-    simManager.Dyna.CurrentState.Location.Rotation.GetYawPitchRoll(carYaw, carPitch, carRoll);
+    float carYaw, carPit, carRol;
+    simManager.Dyna.CurrentState.Location.Rotation.GetYawPitchRoll(carYaw, carPit, carRol); // -180 to 180°
 
     // Do calculations
-    double targetYaw = Math::ToDeg(Math::Atan2(speedVec.x, speedVec.z));
-    double targetPitch = GetD("shweetz_pitch_deg");
-    double targetRoll = 0;
+    double targetYaw = GetD("shweetz_yaw_deg") + Math::ToDeg(Math::Atan2(speedVec.x, speedVec.z));
+    double targetPit = GetD("shweetz_pitch_deg");
+    double targetRol = 0;
+    targetYaw = AngleProject180To180Deg(targetYaw);
+    targetPit = AngleProject180To180Deg(targetPit);
+    targetRol = AngleProject180To180Deg(targetRol);
 
-    double diffYaw   = Math::Abs(Math::ToDeg(carYaw) - targetYaw);
-    double diffPitch = Math::Abs(Math::ToDeg(carPitch) - targetPitch);
-    double diffRoll  = Math::Abs(Math::ToDeg(carRoll) - targetRoll);
-    diffYaw = Math::Max(diffYaw - 90, 0.0); // [-90; 90]° yaw is ok to nosebug, so 100° should only add 10°
+    double diffYaw = Math::Abs(Math::ToDeg(carYaw) - targetYaw);
+    double diffPit = Math::Abs(Math::ToDeg(carPit) - targetPit);
+    double diffRol = Math::Abs(Math::ToDeg(carRol) - targetRol);
+    diffYaw = diffYaw > 180 ? 360 - diffYaw : diffYaw;
+    diffPit = diffPit > 180 ? 360 - diffPit : diffPit;
+    diffRol = diffRol > 180 ? 360 - diffRol : diffRol;
 
-    return diffYaw + diffPitch + diffRoll;
+    if (GetB("shweetz_allow_yaw_180")) {
+        diffYaw = Math::Max(diffYaw - 90, 0.0); // [-90; 90]° yaw is ok to nosebug, so 100° should only add 10°
+    }
+
+    return diffYaw + diffPit + diffRol;
 }
 
 bool IsNosePos(SimulationManager@ simManager)
