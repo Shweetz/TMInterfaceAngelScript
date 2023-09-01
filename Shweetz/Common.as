@@ -367,3 +367,10 @@ dictionary baseAirTimes = {
     {"18000", 0},
     {"18010", 0}
 };*/
+
+void Print(string str)
+{
+    if (debugPrint) {
+        print(str);
+    }
+}

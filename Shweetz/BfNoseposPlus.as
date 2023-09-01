@@ -86,30 +86,56 @@ BFEvaluationResponse@ OnEvaluateNosePos(SimulationManager@ simManager, const BFE
     //int time = simManager.PlayerInfo.RaceTime;
     int raceTime = simManager.TickTime; // After finishing, TickTime=time+10 while RaceTime has the same value twice in a row
     prevTime = raceTime;
+
+    if (info.Rewinded) {
+        curr = CarState();
+    } else {
+        curr.ResetForNewTick();
+    }
     
-    curr.ResetForNewTick();
     curr.time = raceTime;
 
     auto resp = BFEvaluationResponse();
 
-    if (info.Phase == BFPhase::Initial) {
-        if (IsEvalTime(raceTime) && IsBetterNosePos(simManager, curr)) {
-            best = curr;
+    if (GetS("shweetz_next_eval") == "Hold") {        
+        if (info.Phase == BFPhase::Initial) {
+            if (IsPastEvalTime(raceTime) && IsBetterNosePos(simManager, curr)) {
+                best = curr;
+                PrintGreenTextNosePos(best);
+            }
         }
-
-        if (IsMaxTime(raceTime)) {
-            PrintGreenTextNosePos(best);
+        else {
+            if (IsPastEvalTime(raceTime)) {
+                if (IsBetterNosePos(simManager, curr)) {
+                    resp.Decision = BFEvaluationDecision::Accept;
+                    return resp;
+                } 
+                if (!IsNosePos(simManager)) {
+                    resp.Decision = BFEvaluationDecision::Reject;
+                    return resp;
+                }
+            }
         }
     }
     else {
-        if (IsEvalTime(raceTime) && IsBetterNosePos(simManager, curr)) {
-            resp.Decision = BFEvaluationDecision::Accept;
-        }
+        if (info.Phase == BFPhase::Initial) {
+            if (IsEvalTime(raceTime) && IsBetterNosePos(simManager, curr)) {
+                best = curr;
+            }
 
-        if (IsPastEvalTime(raceTime)) {
-            if (resp.Decision != BFEvaluationDecision::Accept) {
+            if (IsMaxTime(raceTime)) {
+                PrintGreenTextNosePos(best);
+            }
+        }
+        else {
+            if (IsEvalTime(raceTime) && IsBetterNosePos(simManager, curr)) {
+                resp.Decision = BFEvaluationDecision::Accept;
+                return resp;
+            }
+
+            if (IsPastEvalTime(raceTime)) {
                 resp.Decision = BFEvaluationDecision::Reject;
-                //print("worse at " + raceTime + ": distance=" + curr.distance);
+                return resp;
             }
         }
     }
@@ -171,6 +197,8 @@ bool IsNosePos(SimulationManager@ simManager)
 
 bool IsBetterNosePos(SimulationManager@ simManager, CarState& curr)
 {
+    Print("IsBetterNosePos");
+
     // Conditions
     if (!AreConditionsMet(simManager)) {
         return false;
@@ -183,18 +211,20 @@ bool IsBetterNosePos(SimulationManager@ simManager, CarState& curr)
     curr.angle = ComputeCarAngleToTarget(simManager);
     curr.distance = DistanceToPoint(pos);
     curr.speed = Math::Min(speedKmh, 1000);
-
-    //print("distance=" + curr.distance);
-    //print("" + raceTime + ": distance=" + DistanceToPoint(pos));
+    if (IsNosePos(simManager)) {
+        if (curr.noseposUntil == 0 || curr.noseposUntil == curr.time - 10) {
+            curr.noseposUntil = curr.time;
+        }
+    }
 
     if (best.distance == -1) {
         // Base run (past conditions)
         return true;
     }
     
-    if (best.angle < GetD("shweetz_angle_min_deg") && curr.angle < GetD("shweetz_angle_min_deg")) {
-        // Best and current have a good angle, now check next eval
-        if (GetB("shweetz_next_eval_check")) {
+    if (GetB("shweetz_next_eval_check")) {
+        if (best.angle < GetD("shweetz_angle_min_deg") && curr.angle < GetD("shweetz_angle_min_deg")) {
+            // Best and current have a good angle, now check next eval
             if (GetS("shweetz_next_eval") == "Point") {
                 return curr.distance < best.distance;
             }
@@ -205,8 +235,11 @@ bool IsBetterNosePos(SimulationManager@ simManager, CarState& curr)
                 return curr.time < best.time;
             }
         }
+        if (GetS("shweetz_next_eval") == "Hold") {
+            return curr.noseposUntil > best.noseposUntil;
+        }
     }
-    //print("" + curr.angle + " vs " + best.angle);
+    Print("" + curr.angle + " vs " + best.angle);
     return curr.angle < best.angle;
 }
 

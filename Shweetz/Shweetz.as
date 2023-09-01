@@ -40,6 +40,8 @@ void Main()
 bool rewinded = false; // info.Rewinded
 uint iterations = 0; // info.Iterations
 
+bool debugPrint = false;
+
 void OnSimulationBegin(SimulationManager@ simManager)
 {
     string controller = GetS("controller");
@@ -79,7 +81,7 @@ PluginInfo@ GetPluginInfo()
     auto info = PluginInfo();
     info.Name = "Shweetz's plugin";
     info.Author = "Shweetz";
-    info.Version = "v1.0.3";
+    info.Version = "v1.0.4";
     info.Description = "Description";
     return info;
 }
