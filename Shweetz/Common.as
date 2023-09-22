@@ -79,9 +79,13 @@ int CountWheelsOnGround(SimulationManager@ simManager) {
     return trigger.ContainsPoint(pos);
 }*/
 
-bool IsInTrigger(vec3& pos) {
-    auto trigger = GetTriggerVar();
+bool IsInTrigger(vec3& pos, string& var) {
+    auto trigger = GetTriggerVar(var);
     return trigger.ContainsPoint(pos);
+}
+
+bool IsInTrigger(vec3& pos) {
+    return IsInTrigger(pos, "shweetz_trigger_index");
 }
 
 /**
@@ -89,8 +93,8 @@ bool IsInTrigger(vec3& pos) {
  * The variable index starts at 1, like in TMI UI.
  * Index parameter in GetTriggerByIndex starts at 0, so need to do "-1".
  */
-Trigger3D GetTriggerVar() {
-    uint triggerIndex = int(GetD("shweetz_trigger_index"));
+Trigger3D GetTriggerVar(string& var) {
+    uint triggerIndex = int(GetD(var));
     return GetTriggerByIndex(triggerIndex-1);
 }
 

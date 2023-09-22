@@ -91,7 +91,7 @@ BFEvaluationResponse@ OnEvaluateAirTime(SimulationManager@ simManager, const BFE
     }
     else {
         if (IsEvalTime(raceTime)) {
-            if (IsForceReject(simManager)) {
+            if (IsForceRejectAirTime(simManager)) {
                 resp.Decision = BFEvaluationDecision::Reject;
                 return resp;
             }
@@ -111,8 +111,11 @@ BFEvaluationResponse@ OnEvaluateAirTime(SimulationManager@ simManager, const BFE
     return resp;
 }
 
-bool IsForceReject(SimulationManager@ simManager)
+bool IsForceRejectAirTime(SimulationManager@ simManager)
 {
+    if (IsForceReject(simManager)) {
+        return true;
+    }
     if (simManager.SceneVehicleCar.HasAnyLateralContact) {
         print("hit wall - " + iterations);
         return true;

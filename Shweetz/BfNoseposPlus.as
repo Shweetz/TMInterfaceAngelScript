@@ -92,8 +92,9 @@ BFEvaluationResponse@ OnEvaluateNosePos(SimulationManager@ simManager, const BFE
     } else {
         curr.ResetForNewTick();
     }
-    
     curr.time = raceTime;
+
+    iterations = info.Iterations;
 
     auto resp = BFEvaluationResponse();
 
@@ -128,9 +129,15 @@ BFEvaluationResponse@ OnEvaluateNosePos(SimulationManager@ simManager, const BFE
             }
         }
         else {
-            if (IsEvalTime(raceTime) && IsBetterNosePos(simManager, curr)) {
-                resp.Decision = BFEvaluationDecision::Accept;
-                return resp;
+            if (IsEvalTime(raceTime)) {
+                if (IsForceReject(simManager)) {
+                    resp.Decision = BFEvaluationDecision::Reject;
+                    return resp;
+                }
+                if (IsBetterNosePos(simManager, curr)) {
+                    resp.Decision = BFEvaluationDecision::Accept;
+                    return resp;
+                }
             }
 
             if (IsPastEvalTime(raceTime)) {
@@ -248,6 +255,7 @@ void PrintGreenTextNosePos(CarState best)
     string greenText = "base at " + best.time + ": angle=" + best.angle;
     if (GetS("shweetz_next_eval") == "Point") greenText += ", Distance=" + best.distance;
     if (GetS("shweetz_next_eval") == "Speed") greenText += ", Speed=" + best.speed;
+    greenText += ", Iteration=" + iterations;
     print(greenText);
 }
 

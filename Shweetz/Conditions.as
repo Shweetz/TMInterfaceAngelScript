@@ -1,16 +1,25 @@
 void UIConditions()
 {
-    UI::SliderFloatVar("Min speed (km/h)", "bf_condition_speed", 0.0f, 1000.0f);
+    UI::SliderFloatVar("Min speed (km/h)", "shweetz_condition_speed", 0.0f, 1000.0f);
     UI::InputIntVar("Min CP collected", "shweetz_min_cp", 1);
     UI::SliderIntVar("Min wheels on ground", "shweetz_min_wheels_on_ground", 0, 4);
     UI::SliderIntVar("Gear (0 to disable)", "shweetz_gear", -1, 6);
-    UI::InputIntVar("Trigger index (0 to disable)", "shweetz_trigger_index", 1);
 
     // Trigger
-    Trigger3D trigger = GetTriggerVar();
+    UI::InputIntVar("Trigger index (0 to disable)", "shweetz_trigger_index", 1);
+    Trigger3D trigger = GetTriggerVar("shweetz_trigger_index");
     if (trigger.Size.x != -1) {
         vec3 pos2 = trigger.Position + trigger.Size;
         UI::TextDimmed("The car must be in the trigger of coordinates: ");
+        UI::TextDimmed("" + trigger.Position.ToString() + " " + pos2.ToString());
+    }
+
+    // Anti-Trigger
+    UI::InputIntVar("Anti-Trigger index (0 to disable)", "shweetz_antitrigger_index", 1);
+    trigger = GetTriggerVar("shweetz_antitrigger_index");
+    if (trigger.Size.x != -1) {
+        vec3 pos2 = trigger.Position + trigger.Size;
+        UI::TextDimmed("The car must never hit the trigger of coordinates: ");
         UI::TextDimmed("" + trigger.Position.ToString() + " " + pos2.ToString());
     }
 
@@ -23,7 +32,7 @@ void UIConditions()
 
     UI::Dummy( vec2(0, 25) );
     
-    UI::InputTimeVar("Tick to print if conditions are met", "shweetz_debug");
+    UI::InputTimeVar("Tick to print if conditions are met (0 to disable)", "shweetz_debug");
 
     UI::Dummy( vec2(0, 25) );
 }
@@ -34,8 +43,8 @@ bool AreConditionsMet(SimulationManager@ simManager)
     int debugTick = int(GetD("shweetz_debug"));
 
     float speedKmh = simManager.Dyna.CurrentState.LinearSpeed.Length() * 3.6;
-    if (speedKmh < GetD("bf_condition_speed")) {
-        if (simManager.TickTime == debugTick) { print("Condition speed too low: " + speedKmh + " < " + GetD("bf_condition_speed")); }
+    if (speedKmh < GetD("shweetz_condition_speed")) {
+        if (simManager.TickTime == debugTick) { print("Condition speed too low: " + speedKmh + " < " + GetD("shweetz_condition_speed")); }
         return false;
     }
 
@@ -58,7 +67,7 @@ bool AreConditionsMet(SimulationManager@ simManager)
     }
 
     vec3 pos = simManager.Dyna.CurrentState.Location.Position;
-    if (GetD("shweetz_trigger_index") > 0 && !IsInTrigger(pos)) {
+    if (GetD("shweetz_trigger_index") > 0 && !IsInTrigger(pos, "shweetz_trigger_index")) {
         if (simManager.TickTime == debugTick) { print("Condition trigger not reached"); }
         return false;
     }
@@ -70,4 +79,17 @@ bool AreConditionsMet(SimulationManager@ simManager)
     if (simManager.TickTime == debugTick) { print("Conditions OK"); }
 
     return true;
+}
+
+bool IsForceReject(SimulationManager@ simManager)
+{
+    int debugTick = int(GetD("shweetz_debug"));
+    
+    vec3 pos = simManager.Dyna.CurrentState.Location.Position;
+    if (GetD("shweetz_antitrigger_index") > 0 && IsInTrigger(pos, "shweetz_antitrigger_index")) {
+        if (debugTick > 0) { print("Antitrigger hit at " + curr.time + ", reject iteration " + iterations); }
+        return true;
+    }
+
+    return false;
 }
