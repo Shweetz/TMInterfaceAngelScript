@@ -10,6 +10,7 @@ void Main()
     //RegisterVariable("shweetz_angle_max_deg", 90);
     RegisterVariable("shweetz_yaw_deg", 0);
     RegisterVariable("shweetz_pitch_deg", 85);
+    RegisterVariable("shweetz_roll_deg", 0);
     RegisterVariable("shweetz_allow_yaw_180", true);
 
     // Conditions
@@ -83,7 +84,7 @@ PluginInfo@ GetPluginInfo()
     auto info = PluginInfo();
     info.Name = "Shweetz's plugin";
     info.Author = "Shweetz";
-    info.Version = "v1.0.5";
+    info.Version = "v1.0.6";
     info.Description = "Description";
     return info;
 }

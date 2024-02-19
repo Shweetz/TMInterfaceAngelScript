@@ -37,9 +37,10 @@ void UINosePos()
 
     UI::Dummy( vec2(0, 25) );
 
-    UI::InputIntVar("Target yaw (°) (90/-90 for left/right)", "shweetz_yaw_deg", 1);
-    UI::InputIntVar("Target pitch (°)", "shweetz_pitch_deg", 1);
-    UI::CheckboxVar("Accept any yaw for nosepos", "shweetz_allow_yaw_180");
+    UI::InputIntVar("Target yaw (°) (90 for left gs and uber, -90 for right)", "shweetz_yaw_deg", 1);
+    UI::InputIntVar("Target pitch (°) (85 to 90 for nosepos, 0 for gs, -25 for uber)", "shweetz_pitch_deg", 1);
+    UI::InputIntVar("Target roll (°) (usually 0)", "shweetz_roll_deg", 1);
+    UI::CheckboxVar("Accept any yaw for nosepos (uncheck for yaw bruteforce)", "shweetz_allow_yaw_180");
 
     // Change eval
     if (UI::CheckboxVar("Change eval after nosepos is good enough", "shweetz_next_eval_check"))
@@ -173,7 +174,7 @@ double ComputeCarAngleToTarget(SimulationManager@ simManager)
     // Do calculations
     double targetYaw = GetD("shweetz_yaw_deg") + Math::ToDeg(Math::Atan2(speedVec.x, speedVec.z));
     double targetPit = GetD("shweetz_pitch_deg");
-    double targetRol = 0;
+    double targetRol = GetD("shweetz_roll_deg");
     targetYaw = AngleProject180To180Deg(targetYaw);
     targetPit = AngleProject180To180Deg(targetPit);
     targetRol = AngleProject180To180Deg(targetRol);
