@@ -1,13 +1,17 @@
 bool executeHandler = false;
 SimulationState@ stateToRestore = null;
-int timestampStartSearch;
+int nextCheck;
 int iterationCount;
 vec3 lastPos;
 int bestFinishTime;
-int nextCheck;
+bool stopOnFinish;
+bool findAllFinishes;
+string resultFile;
+bool saveWithTimestamp;
+int timestampStartSearch;
 int timeLimit;
 int goalHeight;
-int goalPosDiff;
+float goalPosDiff;
 
 void Main()
 {
@@ -21,17 +25,24 @@ void OnSimulationBegin(SimulationManager@ simManager)
         // Not our handler, do nothing.
         return;
     }
-    timestampStartSearch = 667320;
-    // timestampStartSearch = 667000;
-    // timestampStartSearch = 666000;
-    timestampStartSearch = 30000; // 30000
+    nextCheck = CurrentUpTimestamp() + 1000;
     iterationCount = 0;
     lastPos = vec3(0, 0, 0);
     bestFinishTime = -1;
-    nextCheck = CurrentUpTimestamp() + 1000;
+    
+    // Parameters that can be changed
+    stopOnFinish = false;
+    findAllFinishes = false;
+    resultFile = "result.txt";
+    // saveWithTimestamp = true;
+    
+    // timestampStartSearch = 667320;
+    // timestampStartSearch = 667000;
+    // timestampStartSearch = 666000;
+    timestampStartSearch = 0; // 121200
     timeLimit = 743370; // for A01
-    goalHeight = 24; // 9 fell in water or out of stadium; 24 fell of A01
-    goalPosDiff = 0.004; // use trigger?
+    goalHeight = 9; // 9 fell in water or out of stadium, 24 fell off in A01, use trigger?
+    goalPosDiff = 0.4;
 
     // A01 12:22.36 (750000 = 12:30:00)
     // 667320 press up (11:07.32)
@@ -55,10 +66,14 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled)
 
     if (simManager.PlayerInfo.RaceFinished) {
         Accept(simManager);
-        Reject(simManager); // keep searching after finding finish
+        if (!stopOnFinish) {
+            Reject(simManager); // keep searching for faster end after finding finish
+            // return;
+        }
     }
 
     int raceTime = simManager.RaceTime;
+    // print("" + raceTime);
     if (raceTime == 0) {
         simManager.InputEvents.Clear(); // if the bruteforced replay has inputs
     }
@@ -110,15 +125,34 @@ void Reject(SimulationManager@ simManager)
 void Accept(SimulationManager@ simManager)
 {
     int finishTime = simManager.RaceTime;
+
+    CommandList list;
+    list.Content = simManager.InputEvents.ToCommandsText();
+    
     if (bestFinishTime == -1 || finishTime < bestFinishTime) 
     {
-        bestFinishTime = bestFinishTime;
-        CommandList list;
-        list.Content = simManager.InputEvents.ToCommandsText();
-        list.Save("result.txt");
-        print("Run finished! Inputs saved in result.txt");
+        bestFinishTime = finishTime;
+        if (!findAllFinishes) {
+            // Speeds up the later runs because lowers timeLimit
+            timeLimit = finishTime;
+        }
+
+        list.Save(resultFile);
+        print("Run finished! Time: " + finishTime + ", " + list.Content + " saved in result.txt");
     } else {
-        print("Run finished! But slower: " + finishTime + ">" + bestFinishTime);
+        print("Run finished! But slower: " + finishTime + ">" + bestFinishTime + " with " + list.Content);
+    }
+}
+
+void OnCheckpointCountChanged(SimulationManager@ simManager, int count, int target)
+{
+    if (!executeHandler) {
+        // Not our handler, do nothing.
+        return;
+    }
+    if (count == target) {
+        // Keep simulation going if the replay finishes before the inputs
+        simManager.PreventSimulationFinish();
     }
 }
 
