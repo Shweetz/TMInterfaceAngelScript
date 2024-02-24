@@ -15,6 +15,9 @@ float goalPosDiff;
 
 void Main()
 {
+    RegisterVariable("lowinput_minTime", "Min Time for input change");
+    RegisterVariable("lowinput_maxTime", "Max Time for run to finish");
+
     RegisterValidationHandler("low_input_bf", "Low Input BF");
 }
 
@@ -33,16 +36,18 @@ void OnSimulationBegin(SimulationManager@ simManager)
     // Parameters that can be changed
     stopOnFinish = false;
     findAllFinishes = false;
-    resultFile = "result.txt";
+    resultFile = "result";
     // saveWithTimestamp = true;
     
     // timestampStartSearch = 667320;
     // timestampStartSearch = 667000;
     // timestampStartSearch = 666000;
-    timestampStartSearch = 0; // 121200
+    timestampStartSearch = 121200; // 529000
     timeLimit = 743370; // for A01
+    timestampStartSearch = GetVariableDouble("lowinput_minTime");
+    timeLimit = GetVariableDouble("lowinput_maxTime");
     goalHeight = 9; // 9 fell in water or out of stadium, 24 fell off in A01, use trigger?
-    goalPosDiff = 0.4;
+    goalPosDiff = 0.1;
 
     // A01 12:22.36 (750000 = 12:30:00)
     // 667320 press up (11:07.32)
@@ -112,6 +117,12 @@ void Reject(SimulationManager@ simManager)
 {
     // print("iteration " + iterationCount);
     iterationCount++;
+
+    if (CurrentUpTimestamp() >= timeLimit) {
+        // an earlier iteration finished before this one starts, stop the bf
+        simManager.ForceFinish();
+    }
+
     simManager.InputEvents.Clear();
     simManager.InputEvents.Add(CurrentUpTimestamp(), InputType::Up, 1);
     simManager.RewindToState(stateToRestore);
@@ -119,7 +130,11 @@ void Reject(SimulationManager@ simManager)
     // new position after rewind
     lastPos = simManager.Dyna.CurrentState.Location.Position;
     nextCheck = CurrentUpTimestamp() + 1000;
-    print("Trying press up " + simManager.RaceTime);
+    if (bestFinishTime == -1) {
+        print("Trying press up " + simManager.RaceTime);
+    } else {
+        print("Trying press up " + simManager.RaceTime + ", bestFinishTime=" + bestFinishTime);
+    }
 }
 
 void Accept(SimulationManager@ simManager)
@@ -137,7 +152,7 @@ void Accept(SimulationManager@ simManager)
             timeLimit = finishTime;
         }
 
-        list.Save(resultFile);
+        list.Save(resultFile + "_" + finishTime + ".txt");
         print("Run finished! Time: " + finishTime + ", " + list.Content + " saved in result.txt");
     } else {
         print("Run finished! But slower: " + finishTime + ">" + bestFinishTime + " with " + list.Content);
