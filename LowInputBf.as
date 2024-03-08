@@ -2,7 +2,7 @@ bool executeHandler = false;
 // array<string> modes = { "Press up", "Shift timings", "Try all timings" };
 array<string> modes = { "Press up", "Shift timings" };
 // array<string> targets = { "Finish", "Checkpoint", "Distance/Speed", "Trigger" };
-array<string> targets = { "Finish", "Checkpoint" };
+array<string> targets = { "Finish", "Checkpoint", "Trigger" };
 CommandList replayInputList;
 SimulationState @stateToRestore = null;
 int nextCheck;
@@ -17,7 +17,7 @@ int timestampStartSearch;
 int timeLimit;
 int goalHeight;
 float goalPosDiff;
-bool clearReplayInputs;
+// bool clearReplayInputs;
 
 void Main()
 {
@@ -26,6 +26,7 @@ void Main()
     RegisterVariable("lowinput_mode", modes[0]);
     RegisterVariable("lowinput_target", targets[0]);
     RegisterVariable("lowinput_cp_count", 1);
+    RegisterVariable("lowinput_trigger_index", 1);
 
     RegisterValidationHandler("low_input_bf", "Low Input BF", UILowInput);
 }
@@ -35,6 +36,7 @@ void UILowInput()
     string lowinput_mode = GetVariableString("lowinput_mode");
     string lowinput_target = GetVariableString("lowinput_target");
     string lowinput_cp_count = GetVariableDouble("lowinput_cp_count");
+    string lowinput_trigger_index = GetVariableDouble("lowinput_trigger_index");
 
     UI::InputTimeVar("Min Time for input change", "lowinput_minTime");
     UI::InputTimeVar("Max Time for finish", "lowinput_maxTime");
@@ -42,11 +44,14 @@ void UILowInput()
     lowinput_target = BuildCombo("Optimization target", lowinput_target, targets);
     if (lowinput_target == "Checkpoint") {
         UI::InputIntVar("Checkpoint count", "lowinput_cp_count", 1);
+    } else if (lowinput_target == "Trigger") {
+        UI::InputIntVar("Trigger index", "lowinput_trigger_index", 1);
     }
 
     SetVariable("lowinput_mode", lowinput_mode);
     SetVariable("lowinput_target", lowinput_target);
     SetVariable("lowinput_cp_count", lowinput_cp_count);
+    SetVariable("lowinput_trigger_index", lowinput_trigger_index);
 }
 
 void OnSimulationBegin(SimulationManager@ simManager)
@@ -56,10 +61,6 @@ void OnSimulationBegin(SimulationManager@ simManager)
         // Not our handler, do nothing.
         return;
     }
-    
-    // Store replay inputs in a CommandList
-    replayInputList.Content = simManager.InputEvents.ToCommandsText();
-    replayInputList.Process(CommandListProcessOption::OnlyParse);
 
     @stateToRestore = null;
     nextCheck = CurRestoreTime() + 1000;
@@ -82,15 +83,22 @@ void OnSimulationBegin(SimulationManager@ simManager)
     timeLimit = int(GetVariableDouble("lowinput_maxTime"));
     goalHeight = 9; // 9 fell in water or out of stadium, 24 fell off in A01, use trigger?
     goalPosDiff = 0.1;
-    clearReplayInputs = false;
+    // clearReplayInputs = false;
 
     // A01 12:22.36 (750000 = 12:30:00)
     // 667320 press up (11:07.32)
     
+    // Store replay inputs in a CommandList
+    // if (!clearReplayInputs) {
+    replayInputList.Content = simManager.InputEvents.ToCommandsText();
+    replayInputList.Process(CommandListProcessOption::OnlyParse);
+    // }
+    
     simManager.RemoveStateValidation();
     simManager.SetSimulationTimeLimit(timeLimit);
 
-    print("Starting low input bf");
+    print("");
+    print("Starting low input bf in mode " + GetVariableString("lowinput_mode") + " with target " + GetVariableString("lowinput_target"));
 }
 
 void OnSimulationStep(SimulationManager@ simManager, bool userCancelled)
@@ -100,7 +108,6 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled)
         return;
     }
     if (userCancelled) {
-        simManager.ForceFinish();
         return;
     }
 
@@ -108,15 +115,15 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled)
         Accept(simManager);
         if (!stopOnFinish) {
             Reject(simManager); // keep searching for faster end after finding finish
-            // return;
+            return;
         }
     }
 
     int raceTime = simManager.RaceTime;
     // print("" + raceTime);
-    if (raceTime == 0 && clearReplayInputs) {
-        simManager.InputEvents.Clear();
-    }
+    // if (raceTime == 0 && GetVariableString("lowinput_mode") == "Press up") {
+    //     simManager.InputEvents.Clear();
+    // }
     if (raceTime == CurRestoreTime()) {
         @stateToRestore = simManager.SaveState(); // an input changed at the restoring timestamp will be applied
     }
@@ -170,13 +177,8 @@ bool CheckIfReject(SimulationManager@ simManager)
 
 void Reject(SimulationManager@ simManager)
 {
-    // print("iteration " + iterationCount);
     iterationCount++;
-
-    if (CurRestoreTime() >= timeLimit) {
-        // an earlier iteration finished before this one starts, stop the bf
-        simManager.ForceFinish();
-    }
+    // print("iteration " + iterationCount);
 
     LoadNextInputs(simManager);
     // PrintInputs(simManager);
@@ -194,14 +196,19 @@ void Reject(SimulationManager@ simManager)
 
 bool CheckIfAccept(SimulationManager@ simManager)
 {
-    if (GetVariableString("lowinput_target") == "Finish") {
+    string target = GetVariableString("lowinput_target");
+    if (target == "Finish") {
         return simManager.PlayerInfo.RaceFinished;
     }
-    else if (GetVariableString("lowinput_target") == "Checkpoint") {
+    else if (target == "Checkpoint") {
         return simManager.PlayerInfo.CurCheckpointCount >= uint(GetVariableDouble("lowinput_cp_count"));
     }
+    else if (target == "Trigger") {
+        Trigger3D trigger = GetTriggerByIndex(uint(GetVariableDouble("lowinput_trigger_index"))-1);
+        return trigger.ContainsPoint(simManager.Dyna.CurrentState.Location.Position);
+    }
 
-    print("Error lowinput_target=" + GetVariableString("lowinput_target"));
+    print("Error lowinput_target=" + target);
     return simManager.PlayerInfo.RaceFinished;
 }
 
@@ -218,15 +225,19 @@ void Accept(SimulationManager@ simManager)
         if (!findAllFinishes) {
             // Speeds up the later runs because lowers timeLimit
             timeLimit = finishTime;
+            simManager.SetSimulationTimeLimit(timeLimit);
         }
 
         string resultFile = "result_" + finishTime + ".txt";
         resultFile = "result.txt";
         list.Save(resultFile);
-        print("Run finished! Time: " + finishTime + ", " + list.Content + " saved in " + resultFile);
+        print("Run finished! Time: " + finishTime + ", inputs saved in " + resultFile + ":");
     } else {
-        print("Run finished! But slower: " + finishTime + ">" + bestFinishTime + " with " + list.Content);
+        print("Run finished! But slower: " + finishTime + ">" + bestFinishTime + ":");
     }
+
+    print("" + list.Content);
+    print("");
 }
 
 void LoadNextInputs(SimulationManager@ simManager)
