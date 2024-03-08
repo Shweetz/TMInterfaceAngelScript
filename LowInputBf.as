@@ -1,6 +1,8 @@
 bool executeHandler = false;
 // array<string> modes = { "Press up", "Shift timings", "Try all timings" };
 array<string> modes = { "Press up", "Shift timings" };
+// array<string> targets = { "Finish", "Checkpoint", "Distance/Speed", "Trigger" };
+array<string> targets = { "Finish", "Checkpoint" };
 CommandList replayInputList;
 SimulationState @stateToRestore = null;
 int nextCheck;
@@ -22,6 +24,8 @@ void Main()
     RegisterVariable("lowinput_minTime", 0);
     RegisterVariable("lowinput_maxTime", 1000000);
     RegisterVariable("lowinput_mode", modes[0]);
+    RegisterVariable("lowinput_target", targets[0]);
+    RegisterVariable("lowinput_cp_count", 1);
 
     RegisterValidationHandler("low_input_bf", "Low Input BF", UILowInput);
 }
@@ -29,12 +33,20 @@ void Main()
 void UILowInput()
 {
     string lowinput_mode = GetVariableString("lowinput_mode");
+    string lowinput_target = GetVariableString("lowinput_target");
+    string lowinput_cp_count = GetVariableDouble("lowinput_cp_count");
 
     UI::InputTimeVar("Min Time for input change", "lowinput_minTime");
     UI::InputTimeVar("Max Time for finish", "lowinput_maxTime");
     lowinput_mode = BuildCombo("Mode", lowinput_mode, modes);
+    lowinput_target = BuildCombo("Optimization target", lowinput_target, targets);
+    if (lowinput_target == "Checkpoint") {
+        UI::InputIntVar("Checkpoint count", "lowinput_cp_count", 1);
+    }
 
     SetVariable("lowinput_mode", lowinput_mode);
+    SetVariable("lowinput_target", lowinput_target);
+    SetVariable("lowinput_cp_count", lowinput_cp_count);
 }
 
 void OnSimulationBegin(SimulationManager@ simManager)
@@ -92,7 +104,7 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled)
         return;
     }
 
-    if (simManager.PlayerInfo.RaceFinished) {
+    if (CheckIfAccept(simManager)) {
         Accept(simManager);
         if (!stopOnFinish) {
             Reject(simManager); // keep searching for faster end after finding finish
@@ -110,18 +122,11 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled)
     }
     else if (raceTime == nextCheck) {
         // Check if the run is worth to simulate longer or not
-        vec3 pos = simManager.Dyna.CurrentState.Location.Position;
-        
-        float posDiff = Math::Distance(pos, lastPos);
-        bool wantReject = posDiff < goalPosDiff;
-        wantReject = wantReject || pos.y < goalHeight;
-
-        if (wantReject) {
-            // print("pos=" + pos.ToString());
+        if (CheckIfReject(simManager)) {
             Reject(simManager);
             return;
         } else {
-            lastPos = pos;
+            lastPos = simManager.Dyna.CurrentState.Location.Position;
             nextCheck += 1000;
         }
     }
@@ -153,6 +158,16 @@ int CurRestoreTime()
     return timestampStartSearch + iterationCount * 10;
 }
 
+bool CheckIfReject(SimulationManager@ simManager)
+{
+    vec3 pos = simManager.Dyna.CurrentState.Location.Position;
+    // print("pos=" + pos.ToString());
+    float posDiff = Math::Distance(pos, lastPos);
+    bool wantReject = posDiff < goalPosDiff;
+    wantReject = wantReject || pos.y < goalHeight;
+    return wantReject;
+}
+
 void Reject(SimulationManager@ simManager)
 {
     // print("iteration " + iterationCount);
@@ -175,6 +190,19 @@ void Reject(SimulationManager@ simManager)
     } else {
         print("Trying iteration starting at " + CurRestoreTime() + ", bestFinishTime=" + bestFinishTime);
     }
+}
+
+bool CheckIfAccept(SimulationManager@ simManager)
+{
+    if (GetVariableString("lowinput_target") == "Finish") {
+        return simManager.PlayerInfo.RaceFinished;
+    }
+    else if (GetVariableString("lowinput_target") == "Checkpoint") {
+        return simManager.PlayerInfo.CurCheckpointCount >= uint(GetVariableDouble("lowinput_cp_count"));
+    }
+
+    print("Error lowinput_target=" + GetVariableString("lowinput_target"));
+    return simManager.PlayerInfo.RaceFinished;
 }
 
 void Accept(SimulationManager@ simManager)
@@ -233,6 +261,13 @@ void PrintInputs(SimulationManager@ simManager)
 //     return otherBuffer;
 // }
 
+// Testing purposes
+// void OnRunStep(SimulationManager@ simManager, bool userCancelled) {
+//     print("" + simManager.PlayerInfo.CurCheckpoint);
+//     print("" + simManager.PlayerInfo.CurCheckpointCount);
+//     print("");
+// }
+
 string BuildCombo(string& label, string& value, array<string> values)
 {
     string ret = value;
@@ -256,7 +291,7 @@ PluginInfo@ GetPluginInfo()
     auto info = PluginInfo();
     info.Name = "LowInputBf";
     info.Author = "Shweetz";
-    info.Version = "v1.0.1";
+    info.Version = "v1.0.2";
     info.Description = "Description";
     return info;
 }
