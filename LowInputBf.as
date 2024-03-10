@@ -44,10 +44,6 @@ void UILowInput()
 
     if (UI::CollapsingHeader("Optimization"))
     {
-        UI::InputTimeVar("Min Time for input change", "lowinput_minTime");
-        UI::InputTimeVar("Max Time for input change", "lowinput_maxTime");
-        UI::InputTimeVar("Max Time for finish", "lowinput_finTime");
-        lowinput_mode = BuildCombo("Mode", lowinput_mode, modes);
         lowinput_target = BuildCombo("Optimization target", lowinput_target, targets);
         if (lowinput_target == "Checkpoint") {
             UI::InputIntVar("Checkpoint count", "lowinput_cp_count", 1);
@@ -58,14 +54,18 @@ void UILowInput()
         UI::Dummy(vec2(0, 15));
     }
 
+    if (UI::CollapsingHeader("Input Modification"))
+    {
+        UI::InputTimeVar("Min Time for input change", "lowinput_minTime");
+        UI::InputTimeVar("Max Time for input change", "lowinput_maxTime");
+        lowinput_mode = BuildCombo("Mode", lowinput_mode, modes);
+        UI::Dummy(vec2(0, 15));
+        //UIRules();
+    }
+
     if (UI::CollapsingHeader("Conditions"))
     {
         UIConditions();
-    }
-
-    if (UI::CollapsingHeader("Input Modification"))
-    {
-        UIRules();
     }
 
     SetVariable("lowinput_mode", lowinput_mode);
@@ -74,7 +74,8 @@ void UILowInput()
 
 void UIConditions()
 {
-    UI::InputFloatVar("Min car height (less than 9 fell in water/out of stadium)", "lowinput_cond_height");
+    UI::InputTimeVar("Max Time for finish", "lowinput_finTime");
+    UI::InputFloatVar("Min car height (default=9 for stadium grass)", "lowinput_cond_height");
 
     UI::Dummy(vec2(0, 15));
 }
@@ -221,7 +222,7 @@ void OnSimulationBegin(SimulationManager@ simManager)
     @stateToRestore = null;
     curRestoreTime = inputMinTime;
     nextCheck = curRestoreTime + 1000;
-    iterationCount = 0;
+    iterationCount = -1;
     lastPos = vec3(0, 0, 0);
     bestFinishTime = -1;
     
@@ -269,6 +270,11 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled)
     // }
     if (raceTime == curRestoreTime) {
         @stateToRestore = simManager.SaveState(); // an input changed at the restoring timestamp will be applied
+        
+        if (iterationCount == -1) {
+            Reject(simManager); // this loads inputs for iteration 0 and rewinds
+            return;
+        }
     }
     else if (raceTime == nextCheck) {
         // Check if the run is worth to simulate longer or not
@@ -286,7 +292,7 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled)
     }
 }
 
-void OnSimulationEnd(SimulationManager@ simManager)
+void OnSimulationEnd(SimulationManager@ simManager, SimulationResult result)
 {
     executeHandler = false;
 }
@@ -484,7 +490,7 @@ PluginInfo@ GetPluginInfo()
     auto info = PluginInfo();
     info.Name = "LowInputBf";
     info.Author = "Shweetz";
-    info.Version = "v1.0.2";
+    info.Version = "v1.0.3";
     info.Description = "Description";
     return info;
 }
