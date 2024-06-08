@@ -1,5 +1,5 @@
 bool executeHandler = false;
-array<string> modes = { "Press up", "Shift timings", "Try all timings" };
+array<string> modes = { "Press up", "Shift timings", "Try all timings", "Define input ranges" };
 // array<string> modes = { "Press up", "Shift timings" };
 // array<string> targets = { "Finish", "Checkpoint", "Distance/Speed", "Trigger" };
 array<string> targets = { "Finish", "Checkpoint", "Trigger" };
@@ -8,6 +8,7 @@ SimulationState @stateToRestore = null;
 int curRestoreTime;
 int nextCheck;
 int iterationCount;
+int iterationTotal;
 vec3 lastPos;
 int bestFinishTime;
 bool stopOnFinish;
@@ -20,6 +21,9 @@ int timeLimit;
 float goalHeight;
 float goalPosDiff;
 // bool clearReplayInputs;
+array<Rule@> rules;
+array<string> inputTypes = { "up", "down", "left", "right" };
+array<string> changeTypes = { "press", "rel" };
 
 void Main()
 {
@@ -31,6 +35,7 @@ void Main()
     RegisterVariable("lowinput_cp_count", 1);
     RegisterVariable("lowinput_trigger_index", 1);
     RegisterVariable("lowinput_cond_height", 9);
+    RegisterVariable("lowinput_rules", "");
 
     RegisterValidationHandler("low_input_bf", "Low Input BF", UILowInput);
 }
@@ -56,11 +61,15 @@ void UILowInput()
 
     if (UI::CollapsingHeader("Input Modification"))
     {
-        UI::InputTimeVar("Min Time for input change", "lowinput_minTime");
-        UI::InputTimeVar("Max Time for input change", "lowinput_maxTime");
         lowinput_mode = BuildCombo("Mode", lowinput_mode, modes);
+        if (lowinput_mode == "Define input ranges") {
+            UIRules();
+        } else {
+            UI::InputTimeVar("Min Time for input change", "lowinput_minTime");
+            UI::InputTimeVar("Max Time for input change", "lowinput_maxTime");
+        }
+
         UI::Dummy(vec2(0, 15));
-        //UIRules();
     }
 
     if (UI::CollapsingHeader("Conditions"))
@@ -82,9 +91,8 @@ void UIConditions()
 
 void UIRules()
 {
-    /*
     //print("" + rules.Length);
-    Deserialize(GetS("lowinput_rules"));
+    Deserialize(GetVariableString("lowinput_rules"));
 
     if (UI::Button("Add Rule")) {
         rules.Add(Rule());
@@ -105,10 +113,6 @@ void UIRules()
     UI::Text("Input type           ");
     UI::SameLine();
     UI::Text("Change type         ");
-    UI::SameLine();
-    UI::Text("Diff             ");
-    UI::SameLine();
-    UI::Text("Proba                  ");
 
     UI::Separator();
 
@@ -120,20 +124,6 @@ void UIRules()
         UI::SameLine();
         
         currentRule.end_time = UI::InputInt("##end_time_" + i, currentRule.end_time, 100);
-        UI::SameLine();
-        
-        string inputType = currentRule.input;
-        if (UI::BeginCombo("##inputType_" + i, inputType)) {
-            for (uint j = 0; j < inputTypes.Length; j++)
-            {
-                string currentInputType = inputTypes[j];
-                if (UI::Selectable(currentInputType, inputType == currentInputType)) {
-                    currentRule.input = currentInputType;
-                }
-            }
-                
-            UI::EndCombo();
-        }
         UI::SameLine();
 
         string changeType = currentRule.change;
@@ -152,12 +142,19 @@ void UIRules()
             UI::EndCombo();
         }
         UI::SameLine();
-
-        currentRule.diff = UI::InputInt("##diff_" + i, currentRule.diff, 10);
-        UI::SameLine();
-
-        currentRule.proba = UI::InputFloat("##proba_" + i, currentRule.proba, 0.01);
         
+        string inputType = currentRule.input;
+        if (UI::BeginCombo("##inputType_" + i, inputType)) {
+            for (uint j = 0; j < inputTypes.Length; j++)
+            {
+                string currentInputType = inputTypes[j];
+                if (UI::Selectable(currentInputType, inputType == currentInputType)) {
+                    currentRule.input = currentInputType;
+                }
+            }
+                
+            UI::EndCombo();
+        }
         // Validate/force values
         if (currentRule.start_time < 0) {
             currentRule.start_time = 0;
@@ -179,11 +176,11 @@ void UIRules()
         UI::Dummy( vec2(0, 10) );
     }
     
-    UICopyButtons(width);
+    // UICopyButtons(width);
     
     UI::PopItemWidth();
 
-    SetVariable("shweetz_rules", Serialize(rules));*/
+    SetVariable("lowinput_rules", Serialize(rules));
 
     UI::Dummy(vec2(0, 15));
 }
@@ -240,8 +237,16 @@ void OnSimulationBegin(SimulationManager@ simManager)
     if (GetVariableString("lowinput_mode") == "Try all timings") {
         int inputCount = replayInputList.InputCommands.Length;
         int possCount = (inputMaxTime - inputMinTime) / 10;
-        int itCount = int(Math::Pow(possCount, inputCount));
-        print("" + inputCount + " inputs and " + possCount + " possible timings, so " + itCount + " iterations needed");
+        iterationTotal = int(Math::Pow(possCount, inputCount));
+        print("" + inputCount + " inputs and " + possCount + " possible timings, so " + iterationTotal + " iterations needed");
+    }
+    else if (GetVariableString("lowinput_mode") == "Define input ranges") {
+        iterationTotal = 1;
+        for (uint i = 0; i < rules.Length; i++)
+        {
+            iterationTotal *= (rules[i].end_time - rules[i].start_time) / 10 + 1;
+        }
+        print("" + iterationTotal + " iterations needed");
     }
 }
 
@@ -330,10 +335,6 @@ bool CheckIfReject(SimulationManager@ simManager)
 void Reject(SimulationManager@ simManager)
 {
     iterationCount++;
-    // "Try all timings" handles the variable in "LoadNextInputs" (or not at all)
-    if (GetVariableString("lowinput_mode") != "Try all timings") {
-        curRestoreTime = inputMinTime + iterationCount * 10;
-    }
     // print("iteration " + iterationCount);
 
     LoadNextInputs(simManager);
@@ -403,13 +404,16 @@ void Accept(SimulationManager@ simManager)
 
 void LoadNextInputs(SimulationManager@ simManager)
 {
+    // print("LoadNextInputs");
     simManager.InputEvents.Clear();
     
     string mode = GetVariableString("lowinput_mode");
     if (mode == "Press up") {
+        curRestoreTime = inputMinTime + iterationCount * 10;
         simManager.InputEvents.Add(curRestoreTime, InputType::Up, 1);
     }
     else if (mode == "Shift timings") {
+        curRestoreTime = inputMinTime + iterationCount * 10;
         for (uint i = 0; i < replayInputList.InputCommands.Length; i++) {
             InputCommand event = replayInputList.InputCommands[i];
             //print("" + event.Timestamp + " " + event.Type + " " + event.State);
@@ -419,21 +423,53 @@ void LoadNextInputs(SimulationManager@ simManager)
     else if (mode == "Try all timings") {
         int minTime = int(GetVariableDouble("lowinput_minTime"));
         int maxTime = int(GetVariableDouble("lowinput_maxTime"));
-        int possibleTimings = (maxTime - minTime) / 10;
+        int possibleTimings = (maxTime - minTime) / 10 + 1;
 
         // remainder when reading iterationCount
         // example, 10 timings with 2 inputs, so 100 iterations
         // iteration 15 => 2nd input is at timing 5, remainder 1, 1st input is at timing 1
         int remainder = iterationCount;
 
-        for (uint i = 0; i < replayInputList.InputCommands.Length; i++) {
-            uint index_backwards = replayInputList.InputCommands.Length - 1 - i;
-            int inputTime = minTime + (remainder % possibleTimings) * 10;
+        // index backwards
+        uint len = replayInputList.InputCommands.Length;
+        for (uint i = len - 1; i < len; i--) {
+            int inputIteration = remainder % possibleTimings;
+            int inputTime = minTime + inputIteration * 10;
 
-            InputCommand event = replayInputList.InputCommands[index_backwards];
+            InputCommand event = replayInputList.InputCommands[i];
             simManager.InputEvents.Add(inputTime, event.Type, event.State);
             //print("" + event.Timestamp + " " + event.Type + " " + event.State);
 
+            remainder = int(remainder / possibleTimings);
+        }
+
+        if (remainder > 0) {
+            print("All combinations have been tried, stop bf");
+            simManager.SetSimulationTimeLimit(0);
+        }
+    }
+    else if (mode == "Define input ranges") {
+        int remainder = iterationCount;
+
+        Deserialize(GetVariableString("lowinput_rules"));
+        
+        // index backwards
+        for (uint i = rules.Length - 1; i < rules.Length; i--)
+        {
+            Rule rule = rules[i];
+            int possibleTimings = (rule.end_time - rule.start_time) / 10 + 1;
+            int inputIteration = remainder % possibleTimings;
+            int inputTime = rule.start_time + inputIteration * 10;
+            
+            InputType inputType = InputType::Up;
+            if (rule.input == "down" ) { inputType = InputType::Down;  }
+            if (rule.input == "left" ) { inputType = InputType::Left;  }
+            if (rule.input == "right") { inputType = InputType::Right; }
+            int value = 1;
+            if (rule.change == "rel") { value = 0; }
+
+            simManager.InputEvents.Add(inputTime, inputType, value);
+            
             remainder = int(remainder / possibleTimings);
         }
 
@@ -470,7 +506,8 @@ void PrintInputs(SimulationManager@ simManager)
 string BuildCombo(string& label, string& value, array<string> values)
 {
     string ret = value;
-    if (UI::BeginCombo(label, value)) {
+    if (UI::BeginCombo(label, value))
+    {
         for (uint i = 0; i < values.Length; i++)
         {
             string currentValue = values[i];
@@ -485,12 +522,84 @@ string BuildCombo(string& label, string& value, array<string> values)
     return ret;
 }
 
+class Rule
+{
+    string input;
+    string change;
+    float proba;
+    int start_time;
+    int end_time;
+    int diff;
+
+    Rule()
+    {
+        Rule(inputTypes[0], changeTypes[0], 0.01, 0, 0, 50);
+    }
+
+    Rule(string& i, string& c, float p, int s, int e, int d)
+    {
+        input = i;
+        change = c;
+        proba = p;
+        start_time = s;
+        end_time = e;
+        diff = d;
+    }
+
+    string serialize()
+    {
+        return input + "," + change + "," + proba + "," + start_time + "," + end_time + "," + diff;
+    }
+
+    void deserialize(string& str)
+    {
+        // print(str);
+        array<string>@ splits = str.Split(",");
+        input = splits[0];
+        change = splits[1];
+        proba = Text::ParseFloat(splits[2]);
+        start_time = Text::ParseInt(splits[3]);
+        end_time = Text::ParseInt(splits[4]);
+        diff = Text::ParseInt(splits[5]);
+    }
+
+    string toString()
+    {
+        return "rule: From " + start_time + " to " + end_time + ", change " + input + " " + change + " with max diff of " + diff + " and modify_prob=" + proba;
+    }
+}
+
+string Serialize(array<Rule@> rules)
+{
+    string str = "";
+    for (uint i = 0; i < rules.Length; i++) {
+        str += rules[i].serialize() + " ";
+    }
+    return str;
+}
+
+void Deserialize(string& rules_str)
+{
+    rules.Resize(0);
+    // Separate big string in rules
+    array<string>@ splits = rules_str.Split(" ");
+    // print("<" + rules_str + ">");
+    // print("a " + splits.Length);
+    for (uint i = 0; i < splits.Length; i++) {
+        if (splits[i] == "") {
+            continue;
+        }
+        rules.Add(Rule());
+        rules[i].deserialize(splits[i]);
+    }
+}
+
 PluginInfo@ GetPluginInfo()
 {
     auto info = PluginInfo();
     info.Name = "LowInputBf";
     info.Author = "Shweetz";
-    info.Version = "v1.0.3";
+    info.Version = "v1.0.4";
     info.Description = "Description";
     return info;
 }
