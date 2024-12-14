@@ -1,6 +1,5 @@
 bool executeHandler = false;
 array<string> modes = { "Press up", "Shift timings", "Try all timings", "Define input ranges" };
-// array<string> modes = { "Press up", "Shift timings" };
 // array<string> targets = { "Finish", "Checkpoint", "Distance/Speed", "Trigger" };
 array<string> targets = { "Finish", "Checkpoint", "Trigger" };
 CommandList replayInputList;
@@ -22,8 +21,9 @@ float goalHeight;
 float goalPosDiff;
 // bool clearReplayInputs;
 array<Rule@> rules;
-array<string> inputTypes = { "up", "down", "left", "right" };
+array<string> inputTypes = { "up", "down", "left", "right", "left/right" };
 array<string> changeTypes = { "press", "rel" };
+bool printInputs = false;
 
 void Main()
 {
@@ -68,6 +68,8 @@ void UILowInput()
             UI::InputTimeVar("Min Time for input change", "lowinput_minTime");
             UI::InputTimeVar("Max Time for input change", "lowinput_maxTime");
         }
+
+        printInputs = UI::Checkbox("Print inputs of every iteration in console", printInputs);
 
         UI::Dummy(vec2(0, 15));
     }
@@ -234,6 +236,7 @@ void OnSimulationBegin(SimulationManager@ simManager)
 
     print("");
     print("Starting low input bf in mode " + GetVariableString("lowinput_mode") + " with target " + GetVariableString("lowinput_target"));
+    // Count and print total possible iterations
     if (GetVariableString("lowinput_mode") == "Try all timings") {
         int inputCount = replayInputList.InputCommands.Length;
         int possCount = (inputMaxTime - inputMinTime) / 10;
@@ -241,10 +244,19 @@ void OnSimulationBegin(SimulationManager@ simManager)
         print("" + inputCount + " inputs and " + possCount + " possible timings, so " + iterationTotal + " iterations needed");
     }
     else if (GetVariableString("lowinput_mode") == "Define input ranges") {
+        Deserialize(GetVariableString("lowinput_rules"));
         iterationTotal = 1;
         for (uint i = 0; i < rules.Length; i++)
         {
-            iterationTotal *= (rules[i].end_time - rules[i].start_time) / 10 + 1;
+            Rule rule = rules[i];
+
+            int rulePossibleTimings = (rule.end_time - rule.start_time) / 10 + 1;
+            int rulePossibleInputs = 1;
+            if (rule.input == "left/right" && rule.change == "press") {
+                rulePossibleInputs = 2;
+            }
+
+            iterationTotal *= rulePossibleTimings * rulePossibleInputs;
         }
         print("" + iterationTotal + " iterations needed");
     }
@@ -319,7 +331,7 @@ void OnCheckpointCountChanged(SimulationManager@ simManager, int count, int targ
 //     if (GetVariableString("lowinput_mode") == "Try all timings") {
 //         return 0;
 //     }
-//     return inputMinTime + iterationCount * 10;
+//     return inputMinTime + 10 * iterationCount;
 // }
 
 bool CheckIfReject(SimulationManager@ simManager)
@@ -338,7 +350,6 @@ void Reject(SimulationManager@ simManager)
     // print("iteration " + iterationCount);
 
     LoadNextInputs(simManager);
-    // PrintInputs(simManager);
     simManager.RewindToState(stateToRestore);
     
     // new position after rewind
@@ -409,11 +420,11 @@ void LoadNextInputs(SimulationManager@ simManager)
     
     string mode = GetVariableString("lowinput_mode");
     if (mode == "Press up") {
-        curRestoreTime = inputMinTime + iterationCount * 10;
+        curRestoreTime = inputMinTime + 10 * iterationCount;
         simManager.InputEvents.Add(curRestoreTime, InputType::Up, 1);
     }
     else if (mode == "Shift timings") {
-        curRestoreTime = inputMinTime + iterationCount * 10;
+        curRestoreTime = inputMinTime + 10 * iterationCount;
         for (uint i = 0; i < replayInputList.InputCommands.Length; i++) {
             InputCommand event = replayInputList.InputCommands[i];
             //print("" + event.Timestamp + " " + event.Type + " " + event.State);
@@ -433,8 +444,8 @@ void LoadNextInputs(SimulationManager@ simManager)
         // index backwards
         uint len = replayInputList.InputCommands.Length;
         for (uint i = len - 1; i < len; i--) {
-            int inputIteration = remainder % possibleTimings;
-            int inputTime = minTime + inputIteration * 10;
+            int inputCode = remainder % possibleTimings;
+            int inputTime = minTime + 10 * inputCode;
 
             InputCommand event = replayInputList.InputCommands[i];
             simManager.InputEvents.Add(inputTime, event.Type, event.State);
@@ -449,34 +460,77 @@ void LoadNextInputs(SimulationManager@ simManager)
         }
     }
     else if (mode == "Define input ranges") {
-        int remainder = iterationCount;
-
+        // Get updated rules
         Deserialize(GetVariableString("lowinput_rules"));
         
-        // index backwards
+        // Transform unique i (iteration number) in a unique code holding the rules' state
+        // Iterate backwards in rules (it creates a nicer code progression)
+        array<int> inputCodes;
+        int remainder = iterationCount;
         for (uint i = rules.Length - 1; i < rules.Length; i--)
         {
             Rule rule = rules[i];
-            int possibleTimings = (rule.end_time - rule.start_time) / 10 + 1;
-            int inputIteration = remainder % possibleTimings;
-            int inputTime = rule.start_time + inputIteration * 10;
             
+            // Possible timings for the rule
+            int possibleTimings = (rule.end_time - rule.start_time) / 10 + 1;
+            if (rule.input == "left/right" && rule.change == "press") { possibleTimings *= 2; }
+
+            // Insert front because we're iterating backwards
+            inputCodes.InsertAt(0, remainder % possibleTimings);
+            
+            remainder = int(remainder / possibleTimings);
+        }
+
+        InputType currentLeftRightType = InputType::Left;
+
+        // Use the unique code to create a unique rule state, and store the resulting events in InputEvents
+        for (uint i = 0; i < rules.Length; i++)
+        {
+            Rule rule = rules[i];
+            int inputCode = inputCodes[i];
+
+            // Input type
             InputType inputType = InputType::Up;
             if (rule.input == "down" ) { inputType = InputType::Down;  }
             if (rule.input == "left" ) { inputType = InputType::Left;  }
             if (rule.input == "right") { inputType = InputType::Right; }
+
+            // Input time
+            int inputTime = rule.start_time + 10 * inputCode;
+
+            // Case with double possibilities : left or right
+            if (rule.input == "left/right") {
+                if (rule.change == "press") {
+                    // Even iterations (0, 2, 4...) will be for Left, odd ones for Right
+                    if (inputCode % 2 == 0) { currentLeftRightType = InputType::Left; }
+                    else                    { currentLeftRightType = InputType::Right; }
+
+                    inputType = currentLeftRightType;
+                    // Time should only be incremented every 2 iterations, so Left and Right can both be tried before time increases
+                    inputTime = rule.start_time + 10 * int(inputCode / 2);
+                }
+                else {
+                    // Release the previous left/right
+                    inputType = currentLeftRightType;
+                }
+            }
+            
+            // Input value (press or rel)
             int value = 1;
             if (rule.change == "rel") { value = 0; }
 
+            // Add the rule's event in InputEvents
             simManager.InputEvents.Add(inputTime, inputType, value);
-            
-            remainder = int(remainder / possibleTimings);
         }
 
         if (remainder > 0) {
             print("All combinations have been tried, stop bf");
             simManager.SetSimulationTimeLimit(0);
         }
+    }
+    
+    if (printInputs) {
+        PrintInputs(simManager);
     }
 }
 
@@ -599,7 +653,7 @@ PluginInfo@ GetPluginInfo()
     auto info = PluginInfo();
     info.Name = "LowInputBf";
     info.Author = "Shweetz";
-    info.Version = "v1.0.4";
+    info.Version = "v1.0.5";
     info.Description = "Description";
     return info;
 }
