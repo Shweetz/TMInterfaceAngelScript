@@ -3,11 +3,15 @@ My AngelScript plugins for TMInterface
 
 
 ## Nosepos+/AirTime
-To use my main plugin, download the folder "Shweetz" and place it in TMI's Plugins so the path is: Documents\TMInterface\Plugins\Shweetz
+To use this plugin, download Releases/Shweetz.zip and extract it in TMI's Plugins so the path is: Documents\TMInterface\Plugins\Shweetz\
+
+
+## LowInputBf
+To use this plugin, download Releases/LowInputBf.zip and extract it in TMI's Plugins so the path is: Documents\TMInterface\Plugins\LowInputBf.as
 
 
 ## DrawFuture
-To use my DrawFuture plugin, download the folder "DrawFuture" and place it in TMI's Plugins so the path is: Documents\TMInterface\Plugins\DrawFuture
+To use this plugin, download Releases/DrawFuture.zip and extract it in TMI's Plugins so the path is: Documents\TMInterface\Plugins\DrawFuture\
 
 This plugin requires 2 TMI instances, and you need to have a replay on the map you want to draw on.
 
