@@ -22,7 +22,7 @@ float goalPosDiff;
 // bool clearReplayInputs;
 array<Rule@> rules;
 array<string> inputTypes = { "up", "down", "left", "right", "left/right" };
-array<string> changeTypes = { "press", "rel" };
+array<string> changeTypes = { "press", "rel", "steer" };
 bool printInputs = false;
 
 void Main()
@@ -133,9 +133,9 @@ void UIRules()
             for (uint j = 0; j < changeTypes.Length; j++)
             {
                 string currentChangeType = changeTypes[j];
-                if (currentChangeType == "Steering" && currentRule.input != "Steer") {
-                    continue;
-                }
+                // if (currentChangeType == "Steering" && currentRule.input != "Steer") {
+                //     continue;
+                // }
                 if (UI::Selectable(currentChangeType, changeType == currentChangeType)) {
                     currentRule.change = currentChangeType;
                 }
@@ -145,18 +145,30 @@ void UIRules()
         }
         UI::SameLine();
         
-        string inputType = currentRule.input;
-        if (UI::BeginCombo("##inputType_" + i, inputType)) {
-            for (uint j = 0; j < inputTypes.Length; j++)
-            {
-                string currentInputType = inputTypes[j];
-                if (UI::Selectable(currentInputType, inputType == currentInputType)) {
-                    currentRule.input = currentInputType;
-                }
+        if (currentRule.change == "steer")
+        {
+            string tmp = UI::InputText("Range", currentRule.input);
+            if (tmp != "") {
+                currentRule.input = tmp;
             }
-                
-            UI::EndCombo();
         }
+        else
+        {
+            string inputType = currentRule.input;
+            if (UI::BeginCombo("##inputType_" + i, inputType))
+            {
+                for (uint j = 0; j < inputTypes.Length; j++)
+                {
+                    string currentInputType = inputTypes[j];
+                    if (UI::Selectable(currentInputType, inputType == currentInputType)) {
+                        currentRule.input = currentInputType;
+                    }
+                }
+
+                UI::EndCombo();
+            }
+        }
+
         // Validate/force values
         if (currentRule.start_time < 0) {
             currentRule.start_time = 0;
@@ -170,9 +182,9 @@ void UIRules()
         if (currentRule.change == "") {
             currentRule.change = changeTypes[0];
         }
-        if (currentRule.input != "Steer" && currentRule.change == "Steering") {
-            currentRule.change = "Timing";
-        }
+        // if (currentRule.input != "Steer" && currentRule.change == "Steering") {
+        //     currentRule.change = "Timing";
+        // }
         //UI::Text(currentRule.toString());
         
         UI::Dummy( vec2(0, 10) );
@@ -251,9 +263,15 @@ void OnSimulationBegin(SimulationManager@ simManager)
             Rule rule = rules[i];
 
             int rulePossibleTimings = (rule.end_time - rule.start_time) / 10 + 1;
+
             int rulePossibleInputs = 1;
             if (rule.input == "left/right" && rule.change == "press") {
                 rulePossibleInputs = 2;
+            }
+            if (rule.change == "steer") {
+                int start = Text::ParseInt(rule.input.Split(":")[0]);
+                int end = Text::ParseInt(rule.input.Split(":")[1]);
+                rulePossibleInputs = end - start + 1;
             }
 
             iterationTotal *= rulePossibleTimings * rulePossibleInputs;
@@ -474,14 +492,18 @@ void LoadNextInputs(SimulationManager@ simManager)
             // Possible timings for the rule
             int possibleTimings = (rule.end_time - rule.start_time) / 10 + 1;
             if (rule.input == "left/right" && rule.change == "press") { possibleTimings *= 2; }
+            if (rule.change == "steer") {
+                int start = Text::ParseInt(rule.input.Split(":")[0]);
+                int end = Text::ParseInt(rule.input.Split(":")[1]);
+                int rulePossibleInputs = end - start + 1;
+                possibleTimings *= rulePossibleInputs;
+            }
 
             // Insert front because we're iterating backwards
             inputCodes.InsertAt(0, remainder % possibleTimings);
             
             remainder = int(remainder / possibleTimings);
         }
-
-        InputType currentLeftRightType = InputType::Left;
 
         // Use the unique code to create a unique rule state, and store the resulting events in InputEvents
         for (uint i = 0; i < rules.Length; i++)
@@ -494,12 +516,15 @@ void LoadNextInputs(SimulationManager@ simManager)
             if (rule.input == "down" ) { inputType = InputType::Down;  }
             if (rule.input == "left" ) { inputType = InputType::Left;  }
             if (rule.input == "right") { inputType = InputType::Right; }
+            if (rule.change == "steer") { inputType = InputType::Steer; }
 
             // Input time
             int inputTime = rule.start_time + 10 * inputCode;
 
             // Case with double possibilities : left or right
             if (rule.input == "left/right") {
+                InputType currentLeftRightType = InputType::Left;
+
                 if (rule.change == "press") {
                     // Even iterations (0, 2, 4...) will be for Left, odd ones for Right
                     if (inputCode % 2 == 0) { currentLeftRightType = InputType::Left; }
@@ -518,6 +543,18 @@ void LoadNextInputs(SimulationManager@ simManager)
             // Input value (press or rel)
             int value = 1;
             if (rule.change == "rel") { value = 0; }
+
+            if (rule.change == "steer") {
+                // First steer, then time
+                int start = Text::ParseInt(rule.input.Split(":")[0]);
+                int end = Text::ParseInt(rule.input.Split(":")[1]);
+                int rulePossibleInputs = end - start + 1;
+                value = start + inputCode % rulePossibleInputs;
+
+                inputTime = rule.start_time + 10 * int(inputCode / rulePossibleInputs);
+
+                // print("" + inputTime + " steer " + value);
+            }
 
             // Add the rule's event in InputEvents
             simManager.InputEvents.Add(inputTime, inputType, value);
@@ -653,7 +690,7 @@ PluginInfo@ GetPluginInfo()
     auto info = PluginInfo();
     info.Name = "LowInputBf";
     info.Author = "Shweetz";
-    info.Version = "v1.0.5";
+    info.Version = "v1.0.6";
     info.Description = "Description";
     return info;
 }
