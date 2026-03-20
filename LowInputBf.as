@@ -17,9 +17,9 @@ bool findAllFinishes;
 int inputMinTime;
 int inputMaxTime;
 int timeLimit;
-float goalHeight;
-float goalPosDiff;
-// bool clearReplayInputs;
+float goalHeight; // car below this = reject iteration, 0 to disable
+float goalPosDiff; // car movement below this = reject iteration, 0 to disable
+bool clearReplayInputs;
 array<Rule@> rules;
 array<string> inputTypes = { "up", "down", "left", "right", "left/right" };
 array<string> changeTypes = { "press", "rel", "steer" };
@@ -223,8 +223,8 @@ void OnSimulationBegin(SimulationManager@ simManager)
     timeLimit = int(GetVariableDouble("lowinput_finTime"));
     // 9 fell in water or out of stadium, 24 fell off in A01, use trigger?
     goalHeight = GetVariableDouble("lowinput_cond_height"); 
-    goalPosDiff = 0.1;
-    // clearReplayInputs = false;
+    goalPosDiff = 0;
+    clearReplayInputs = false;
 
     // A01 12:22.36 (750000 = 12:30:00)
     // 667320 press up (11:07.32)
@@ -237,16 +237,15 @@ void OnSimulationBegin(SimulationManager@ simManager)
     lastPos = vec3(0, 0, 0);
     bestFinishTime = -1;
     
-    // Store replay inputs in a CommandList
-    // if (!clearReplayInputs) {
+    // Store replay inputs in a CommandList (does not clear inputs from simManager)
     replayInputList.Content = simManager.InputEvents.ToCommandsText();
     replayInputList.Process(CommandListProcessOption::OnlyParse);
-    // }
     
     simManager.RemoveStateValidation();
     simManager.SetSimulationTimeLimit(timeLimit);
 
     print("");
+    print("Time limit set to " + timeLimit);
     print("Starting low input bf in mode " + GetVariableString("lowinput_mode") + " with target " + GetVariableString("lowinput_target"));
     // Count and print total possible iterations
     if (GetVariableString("lowinput_mode") == "Try all timings") {
@@ -278,6 +277,9 @@ void OnSimulationBegin(SimulationManager@ simManager)
         }
         print("" + iterationTotal + " iterations needed");
     }
+    if (GetVariableString("lowinput_mode") == "Press up" || GetVariableString("lowinput_mode") == "Define input ranges") {
+        clearReplayInputs = true;
+    }
 }
 
 void OnSimulationStep(SimulationManager@ simManager, bool userCancelled)
@@ -300,9 +302,10 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled)
 
     int raceTime = simManager.RaceTime;
     // print("" + raceTime);
-    // if (raceTime == 0 && GetVariableString("lowinput_mode") == "Press up") {
-    //     simManager.InputEvents.Clear();
-    // }
+    // Clearing replay inputs must be done here, if done in OnSimulationBegin then "Press up" has no inputs
+    if (raceTime == 0 && clearReplayInputs) {
+        simManager.InputEvents.Clear();
+    }
     if (raceTime == curRestoreTime) {
         @stateToRestore = simManager.SaveState(); // an input changed at the restoring timestamp will be applied
         
@@ -323,6 +326,7 @@ void OnSimulationStep(SimulationManager@ simManager, bool userCancelled)
     }
     if (raceTime >= timeLimit - 10)
     {
+        print("Reject due to race time " + raceTime + " being higher than limit " + (timeLimit - 20));
         Reject(simManager);
     }
 }
@@ -354,11 +358,24 @@ void OnCheckpointCountChanged(SimulationManager@ simManager, int count, int targ
 
 bool CheckIfReject(SimulationManager@ simManager)
 {
+    bool wantReject = false;
     vec3 pos = simManager.Dyna.CurrentState.Location.Position;
     // print("pos=" + pos.ToString());
-    float posDiff = Math::Distance(pos, lastPos);
-    bool wantReject = posDiff < goalPosDiff;
-    wantReject = wantReject || pos.y < goalHeight;
+
+    if (goalHeight != 0) {
+        if (pos.y < goalHeight) {
+            wantReject = true;
+            print("Iteration rejected due to car height " + pos.y + "m, must be above " + goalHeight + "m");
+        }
+    }
+    if (goalPosDiff != 0) {
+        // Distance between current position and position at last check
+        float posDiff = Math::Distance(pos, lastPos);
+        if (posDiff < goalPosDiff) {
+            wantReject = true;
+            print("Iteration rejected due to car moving " + posDiff + "m, must be above " + goalPosDiff + "m");
+        }
+    }
     return wantReject;
 }
 
@@ -417,6 +434,7 @@ void Accept(SimulationManager@ simManager)
             // Speeds up the later runs because lowers timeLimit
             timeLimit = finishTime;
             simManager.SetSimulationTimeLimit(timeLimit);
+            print("Time limit updated to " + timeLimit);
         }
 
         string resultFile = "result_" + finishTime + ".txt";
